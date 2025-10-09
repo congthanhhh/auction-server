@@ -1,5 +1,6 @@
 package com.thanh.auction_server.Controller;
 
+import com.thanh.auction_server.dto.request.PasswordCreationRequest;
 import com.thanh.auction_server.dto.request.UserCreationRequest;
 import com.thanh.auction_server.dto.request.UserUpdateRequest;
 import com.thanh.auction_server.dto.response.UserResponse;
@@ -24,6 +25,12 @@ public class UserController {
     @PostMapping
     ResponseEntity<UserResponse> createUser(@RequestBody @Validated UserCreationRequest request) {
         return ResponseEntity.ok(userService.createUser(request));
+    }
+
+    @PostMapping("/create-password")
+    ResponseEntity<Void> createPassword(@RequestBody @Validated PasswordCreationRequest request) {
+        userService.createPassword(request);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/{id}")

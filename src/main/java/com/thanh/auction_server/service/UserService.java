@@ -1,6 +1,7 @@
 package com.thanh.auction_server.service;
 
 import com.thanh.auction_server.constants.RoleEnum;
+import com.thanh.auction_server.dto.request.PasswordCreationRequest;
 import com.thanh.auction_server.dto.request.UserCreationRequest;
 import com.thanh.auction_server.dto.request.UserUpdateRequest;
 import com.thanh.auction_server.dto.response.UserResponse;
@@ -85,11 +86,21 @@ public class UserService {
         userRepository.delete(user);
     }
 
+    public void createPassword(PasswordCreationRequest request) {
+        var context = SecurityContextHolder.getContext();
+        String name = context.getAuthentication().getName();
+        User user = userRepository.findByUsername(name).orElseThrow(
+                () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        if (StringUtils.hasText(user.getPassword()))
+            throw new UserAlreadyExistsException(ErrorMessage.PASSWORD_ALREADY_EXIST);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        userRepository.save(user);
+
+    }
+
     public UserResponse getMyInfo() {
         var context = SecurityContextHolder.getContext();
         String name = context.getAuthentication().getName();
-        log.info("Get user info: {}", name);
-
         User user = userRepository.findByUsername(name).orElseThrow(
                 () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
         var userResponse = userMapper.toUserResponse(user);
