@@ -19,7 +19,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
     String username;
-    String fullName;
+    String firstName;
+    String lastName;
     String password;
     String email;
     Boolean isActive = true;

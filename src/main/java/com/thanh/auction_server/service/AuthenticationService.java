@@ -4,14 +4,20 @@ import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.constants.RoleEnum;
 import com.thanh.auction_server.dto.request.AuthenticationRequest;
+import com.thanh.auction_server.dto.request.ExchangeTokenRequest;
 import com.thanh.auction_server.dto.request.IntrospectRequest;
+import com.thanh.auction_server.dto.request.RefreshTokenRequest;
 import com.thanh.auction_server.dto.response.AuthenticationResponse;
 import com.thanh.auction_server.dto.response.IntrospectResponse;
 import com.thanh.auction_server.entity.RefreshToken;
+import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.exception.UserNotFoundException;
+import com.thanh.auction_server.repository.OutboundIdentityClient;
+import com.thanh.auction_server.repository.OutboundUserClient;
 import com.thanh.auction_server.repository.RefreshTokenRepository;
 import com.thanh.auction_server.repository.UserRepository;
 import com.nimbusds.jose.crypto.MACVerifier;
@@ -31,9 +37,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.StringJoiner;
-import java.util.UUID;
+import java.util.*;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -42,6 +46,8 @@ import java.util.UUID;
 public class AuthenticationService {
     UserRepository userRepository;
     RefreshTokenRepository refreshTokenRepository;
+    OutboundIdentityClient outboundIdentityClient;
+    private final OutboundUserClient outboundUserClient;
 
     @NonFinal
     @Value("${jwt.valid-duration}")
@@ -55,6 +61,21 @@ public class AuthenticationService {
     @Value("${jwt.signerKey}")
     protected String SIGNER_KEY;
 
+    @NonFinal
+    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    protected String CLIENT_ID;
+
+    @NonFinal
+    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
+    protected String CLIENT_SECRET;
+
+    @NonFinal
+    @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
+    protected String REDIRECT_URI;
+
+    @NonFinal
+    protected final String GRANT_TYPE = "authorization_code";
+
     public IntrospectResponse introspect(IntrospectRequest request) throws JOSEException, ParseException {
         var token = request.getToken();
         JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
@@ -64,6 +85,37 @@ public class AuthenticationService {
         var verified = signedJWT.verify(verifier);
         return IntrospectResponse.builder()
                 .valid(verified && expirationTime.after(new Date()))
+                .build();
+    }
+
+    public AuthenticationResponse outboundAuthenticate(String code) {
+        var response = outboundIdentityClient.exchangeToken(ExchangeTokenRequest.builder()
+                .code(code)
+                .clientId(CLIENT_ID)
+                .clientSecret(CLIENT_SECRET)
+                .redirectUri(REDIRECT_URI)
+                .grantType(GRANT_TYPE)
+                .build());
+        var userInfo = outboundUserClient.getUserInfo("json", response.getAccessToken());
+        Set<Role> roles = new HashSet<>();
+        roles.add(Role.builder().name(String.valueOf(RoleEnum.USER)).build());
+        var user = userRepository.findByUsername(userInfo.getEmail()).orElseGet(
+                () -> userRepository.save( User.builder()
+                    .username(userInfo.getEmail())
+                    .firstName(userInfo.getGivenName())
+                    .lastName(userInfo.getFamilyName())
+                    .isActive(true)
+                    .createdAt(LocalDateTime.now())
+                    .roles(roles)
+                    .build()));
+
+        var accessToken = generateToken(user);
+        var refreshToken = createRefreshToken(user);
+
+        return AuthenticationResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken.getToken())
+                .authenticated(true)
                 .build();
     }
 
@@ -93,8 +145,8 @@ public class AuthenticationService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    public AuthenticationResponse refreshToken(IntrospectRequest request) {
-        var oldRefreshToken = request.getToken();
+    public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
+        var oldRefreshToken = request.getRefreshToken();
         var refreshToken = refreshTokenRepository.findByToken(oldRefreshToken)
                 .orElseThrow(() -> new UnauthorizedException(ErrorMessage.INVALID_REFRESH_TOKEN));
         if (refreshToken.getExpiryDate().isBefore(Instant.now()) || refreshToken.isRevoked()) {

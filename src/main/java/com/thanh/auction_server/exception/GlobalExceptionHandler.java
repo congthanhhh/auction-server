@@ -6,7 +6,6 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -41,7 +40,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAuthorizationDeniedException(AuthorizationDeniedException ex) {
-        ErrorResponse err = new ErrorResponse(HttpStatus.FORBIDDEN.value(), "You do not have permission to access this resource");
+        ErrorResponse err = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(), "You do not have permission to access this resource");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(err);
     }
 

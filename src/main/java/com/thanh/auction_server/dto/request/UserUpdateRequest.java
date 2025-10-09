@@ -13,7 +13,8 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserUpdateRequest {
     String username;
-    String fullName;
+    String firstName;
+    String lastName;
     String password;
     String email;
     LocalDateTime updateAt = LocalDateTime.now();

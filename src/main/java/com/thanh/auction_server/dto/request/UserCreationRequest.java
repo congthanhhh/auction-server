@@ -15,7 +15,9 @@ import java.time.LocalDateTime;
 public class UserCreationRequest {
     @NoAccentsOrSpaces
     String username;
-    String fullName;
+    String firstName;
+    String lastName;
+//    @Size(min = 6, message = "Password must be at least 6 characters long")
     String password;
     String email;
     LocalDateTime createdAt = LocalDateTime.now();
