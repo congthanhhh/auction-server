@@ -23,7 +23,7 @@ public class User {
     String lastName;
     String password;
     String email;
-    Boolean isActive = true;
+    Boolean isActive = false;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 

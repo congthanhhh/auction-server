@@ -3,9 +3,11 @@ package com.thanh.auction_server.Controller;
 import com.nimbusds.jose.JOSEException;
 import com.thanh.auction_server.dto.request.AuthenticationRequest;
 import com.thanh.auction_server.dto.request.IntrospectRequest;
+import com.thanh.auction_server.dto.request.OtpVerificationRequest;
 import com.thanh.auction_server.dto.request.RefreshTokenRequest;
 import com.thanh.auction_server.dto.response.AuthenticationResponse;
 import com.thanh.auction_server.dto.response.IntrospectResponse;
+import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.service.AuthenticationService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
@@ -46,5 +48,10 @@ public class AuthenticationController {
     @PostMapping("/outbound/authenticate")
     ResponseEntity<AuthenticationResponse> outboundAuthenticate(@RequestParam("code") String code) {
         return ResponseEntity.ok(authenticationService.outboundAuthenticate(code));
+    }
+
+    @PostMapping("/verify-otp")
+    ResponseEntity<MessageResponse> verifyOtp(@RequestBody OtpVerificationRequest request) {
+        return ResponseEntity.ok(authenticationService.verifyAccount(request));
     }
 }

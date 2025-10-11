@@ -1,5 +1,6 @@
 package com.thanh.auction_server.configuration;
 
+import com.nimbusds.jose.JOSEException;
 import com.thanh.auction_server.dto.request.IntrospectRequest;
 import com.thanh.auction_server.service.AuthenticationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.spec.SecretKeySpec;
+import java.text.ParseException;
 import java.util.Objects;
 
 @Component
@@ -21,31 +23,23 @@ public class CustomJwtDecoder implements JwtDecoder {
 
     @Autowired
     private AuthenticationService authenticationService;
-
     private NimbusJwtDecoder nimbusJwtDecoder = null;
 
     @Override
     public Jwt decode(String token) throws JwtException {
-
         try {
-            var response = authenticationService.introspect(IntrospectRequest.builder()
-                    .token(token)
-                    .build());
-
-            if (!response.isValid())
-                throw new JwtException("Token invalid");
-        } catch (Exception e) {
+            var response = authenticationService.introspect(IntrospectRequest.builder().token(token).build());
+            if (!response.isValid()) throw new JwtException("Invalid token");
+        } catch (JOSEException | ParseException e) {
             throw new JwtException(e.getMessage());
         }
-
         if (Objects.isNull(nimbusJwtDecoder)) {
-            SecretKeySpec secretKeySpec = new SecretKeySpec(signerKey.getBytes(), "HS256");
+            SecretKeySpec secretKey = new SecretKeySpec(signerKey.getBytes(), "HS256");
             nimbusJwtDecoder = NimbusJwtDecoder
-                    .withSecretKey(secretKeySpec)
+                    .withSecretKey(secretKey)
                     .macAlgorithm(MacAlgorithm.HS256)
                     .build();
         }
-
         return nimbusJwtDecoder.decode(token);
     }
 }

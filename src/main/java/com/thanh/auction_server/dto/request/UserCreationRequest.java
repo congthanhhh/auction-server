@@ -20,5 +20,6 @@ public class UserCreationRequest {
 //    @Size(min = 6, message = "Password must be at least 6 characters long")
     String password;
     String email;
+    Boolean isActive = false;
     LocalDateTime createdAt = LocalDateTime.now();
 }

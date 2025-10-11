@@ -5,12 +5,10 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.constants.RoleEnum;
-import com.thanh.auction_server.dto.request.AuthenticationRequest;
-import com.thanh.auction_server.dto.request.ExchangeTokenRequest;
-import com.thanh.auction_server.dto.request.IntrospectRequest;
-import com.thanh.auction_server.dto.request.RefreshTokenRequest;
+import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.AuthenticationResponse;
 import com.thanh.auction_server.dto.response.IntrospectResponse;
+import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.entity.RefreshToken;
 import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
@@ -48,6 +46,7 @@ public class AuthenticationService {
     RefreshTokenRepository refreshTokenRepository;
     OutboundIdentityClient outboundIdentityClient;
     private final OutboundUserClient outboundUserClient;
+    OtpService otpService;
 
     @NonFinal
     @Value("${jwt.valid-duration}")
@@ -78,13 +77,14 @@ public class AuthenticationService {
 
     public IntrospectResponse introspect(IntrospectRequest request) throws JOSEException, ParseException {
         var token = request.getToken();
-        JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
-
-        SignedJWT signedJWT = SignedJWT.parse(token);
-        Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
-        var verified = signedJWT.verify(verifier);
+        boolean isValid = true;
+        try {
+            verifyToken(token);
+        } catch (Exception e) {
+            isValid = false;
+        }
         return IntrospectResponse.builder()
-                .valid(verified && expirationTime.after(new Date()))
+                .valid(isValid)
                 .build();
     }
 
@@ -123,6 +123,11 @@ public class AuthenticationService {
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
         var user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+
+        if (!user.getIsActive()) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
+        }
+
         boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
         if (!authenticated) throw new UnauthorizedException(ErrorMessage.INVALID_CREDENTIALS);
         String token = generateToken(user);
@@ -132,6 +137,27 @@ public class AuthenticationService {
                 .refreshToken(refreshToken.getToken())
                 .authenticated(true)
                 .build();
+    }
+
+    public MessageResponse verifyAccount(OtpVerificationRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        if (user.getIsActive()) {
+            return MessageResponse.builder()
+                    .message("Account is already verified.")
+                    .build();
+        }
+        boolean isOtpValid = otpService.verifyOtp(user, request.getOtp());
+
+        if (isOtpValid) {
+            user.setIsActive(true);
+            userRepository.save(user);
+            return MessageResponse.builder()
+                    .message("Account verified successfully.")
+                    .build();
+        } else {
+            throw new UnauthorizedException(ErrorMessage.INVALID_OTP);
+        }
     }
 
     private RefreshToken createRefreshToken(User user) {
@@ -163,6 +189,15 @@ public class AuthenticationService {
                 .refreshToken(newRefreshToken.getToken())
                 .authenticated(true)
                 .build();
+    }
+
+    private void verifyToken(String token) throws ParseException, JOSEException {
+        JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
+        SignedJWT signedJWT = SignedJWT.parse(token);
+        Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+        var verified = signedJWT.verify(verifier);
+        if (!verified || expirationTime.before(new Date()))
+            throw new UnauthorizedException(ErrorMessage.INVALID_TOKEN);
     }
 
     private String generateToken(User user) {
