@@ -57,18 +57,22 @@ public class UserService {
 
     @Transactional
     public MessageResponse createUserOtp(UserCreationRequest request) {
-        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            User existingUser = userRepository.findByUsername(request.getUsername()).get();
+        var existingUserOpt = userRepository.findByEmail(request.getEmail());
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
             if (existingUser.getIsActive()) {
-                throw new UserAlreadyExistsException(ErrorMessage.USER_ALREADY_EXIST);
-            }
-            else {
+                throw new UserAlreadyExistsException(ErrorMessage.EMAIL_ALREADY_EXIST);
+            } else {
                 String newOtp = otpService.generateAndSaveOtp(existingUser);
                 emailService.sendOtpEmail(existingUser.getEmail(), newOtp);
                 return MessageResponse.builder()
-                        .message("Người dùng đã tồn tại nhưng chưa được kích hoạt. Đã gửi lại OTP đến email.")
+                        .message("Email đã tồn tại nhưng chưa được kích hoạt. Một OTP mới đã được gửi đến email của bạn.")
                         .build();
             }
+        }
+
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new UserAlreadyExistsException(ErrorMessage.USER_ALREADY_EXIST);
         }
         User user = userMapper.toUser(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -81,7 +85,6 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
 
-        // Gửi OTP cho người dùng mới
         String otp = otpService.generateAndSaveOtp(savedUser);
         emailService.sendOtpEmail(savedUser.getEmail(), otp);
 

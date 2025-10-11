@@ -95,11 +95,22 @@ public class AuthenticationService {
                 .grantType(GRANT_TYPE)
                 .build());
         var userInfo = outboundUserClient.getUserInfo("json", response.getAccessToken());
+        var userEmail = userInfo.getEmail();
 
-        var user = userRepository.findByUsername(userInfo.getEmail()).orElseGet(() -> {
+        var userOptional = userRepository.findByEmail(userEmail);
+        User userToAuthenticate;
+        if (userOptional.isPresent()) {
+            userToAuthenticate = userOptional.get();
+            if (!userToAuthenticate.getIsActive()) {
+                userToAuthenticate.setIsActive(true);
+                userToAuthenticate.setFirstName(userInfo.getGivenName());
+                userToAuthenticate.setLastName(userInfo.getFamilyName());
+                userToAuthenticate.setUsername(userEmail);
+                userRepository.save(userToAuthenticate);
+            }
+        } else {
             Set<Role> roles = new HashSet<>();
-            roleRepository.findById(RoleEnum.USER.name())
-                    .ifPresent(roles::add);
+            roleRepository.findById(RoleEnum.USER.name()).ifPresent(roles::add);
             User newUser = User.builder()
                     .username(userInfo.getEmail())
                     .email(userInfo.getEmail())
@@ -109,12 +120,10 @@ public class AuthenticationService {
                     .createdAt(LocalDateTime.now())
                     .roles(roles)
                     .build();
-            return userRepository.save(newUser);
-        });
-
-        var accessToken = generateToken(user);
-        var refreshToken = createRefreshToken(user);
-
+            userToAuthenticate = userRepository.save(newUser);
+        }
+        var accessToken = generateToken(userToAuthenticate);
+        var refreshToken = createRefreshToken(userToAuthenticate);
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken.getToken())
