@@ -104,6 +104,7 @@ public class AuthenticationService {
                     .username(userInfo.getEmail())
                     .firstName(userInfo.getGivenName())
                     .lastName(userInfo.getFamilyName())
+                    .email(userInfo.getEmail())
                     .isActive(true)
                     .createdAt(LocalDateTime.now())
                     .roles(roles)
