@@ -14,10 +14,7 @@ import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.exception.UserNotFoundException;
-import com.thanh.auction_server.repository.OutboundIdentityClient;
-import com.thanh.auction_server.repository.OutboundUserClient;
-import com.thanh.auction_server.repository.RefreshTokenRepository;
-import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.repository.*;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.SignedJWT;
 import lombok.AccessLevel;
@@ -43,6 +40,7 @@ import java.util.*;
 @Service
 public class AuthenticationService {
     UserRepository userRepository;
+    RoleRepository roleRepository;
     RefreshTokenRepository refreshTokenRepository;
     OutboundIdentityClient outboundIdentityClient;
     private final OutboundUserClient outboundUserClient;
@@ -97,18 +95,22 @@ public class AuthenticationService {
                 .grantType(GRANT_TYPE)
                 .build());
         var userInfo = outboundUserClient.getUserInfo("json", response.getAccessToken());
-        Set<Role> roles = new HashSet<>();
-        roles.add(Role.builder().name(String.valueOf(RoleEnum.USER)).build());
-        var user = userRepository.findByUsername(userInfo.getEmail()).orElseGet(
-                () -> userRepository.save( User.builder()
+
+        var user = userRepository.findByUsername(userInfo.getEmail()).orElseGet(() -> {
+            Set<Role> roles = new HashSet<>();
+            roleRepository.findById(RoleEnum.USER.name())
+                    .ifPresent(roles::add);
+            User newUser = User.builder()
                     .username(userInfo.getEmail())
+                    .email(userInfo.getEmail())
                     .firstName(userInfo.getGivenName())
                     .lastName(userInfo.getFamilyName())
-                    .email(userInfo.getEmail())
                     .isActive(true)
                     .createdAt(LocalDateTime.now())
                     .roles(roles)
-                    .build()));
+                    .build();
+            return userRepository.save(newUser);
+        });
 
         var accessToken = generateToken(user);
         var refreshToken = createRefreshToken(user);
