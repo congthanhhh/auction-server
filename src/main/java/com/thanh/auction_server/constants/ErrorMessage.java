@@ -11,5 +11,7 @@ public class ErrorMessage {
     public static final String UNAUTHORIZED = "Unauthorized.";
     public static final String INVALID_TOKEN = "In-valid token.";
     public static final String INVALID_OTP = "Invalid or expired OTP.";
+    public static final String CURRENT_PASSWORD_INCORRECT = "Current password is incorrect.";
+
 
 }

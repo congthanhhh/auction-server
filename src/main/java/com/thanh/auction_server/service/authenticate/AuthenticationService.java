@@ -1,4 +1,4 @@
-package com.thanh.auction_server.service;
+package com.thanh.auction_server.service.authenticate;
 
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -23,9 +23,11 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.text.ParseException;
@@ -33,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -43,8 +46,9 @@ public class AuthenticationService {
     RoleRepository roleRepository;
     RefreshTokenRepository refreshTokenRepository;
     OutboundIdentityClient outboundIdentityClient;
-    private final OutboundUserClient outboundUserClient;
+    OutboundUserClient outboundUserClient;
     OtpService otpService;
+    RedisTemplate<String, String> redisTemplate;
 
     @NonFinal
     @Value("${jwt.valid-duration}")
@@ -151,6 +155,22 @@ public class AuthenticationService {
                 .build();
     }
 
+    @Transactional
+    public void logout(LogoutRequest request) throws ParseException {
+        String accessToken = request.getAccessToken();
+        SignedJWT signedJWT = SignedJWT.parse(accessToken);
+        String jti = signedJWT.getJWTClaimsSet().getJWTID();
+        Date expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+        long duration = expiryTime.getTime() - System.currentTimeMillis();
+        if (duration > 0) {
+            redisTemplate.opsForValue()
+                    .set("blocklist:" + jti, "logged_out", duration, TimeUnit.MILLISECONDS);
+        }
+        var refreshToken = refreshTokenRepository.findByToken(request.getRefreshToken())
+                .orElseThrow(() -> new UnauthorizedException(ErrorMessage.INVALID_REFRESH_TOKEN));
+        refreshTokenRepository.delete(refreshToken);
+    }
+
     public MessageResponse verifyAccount(OtpVerificationRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
@@ -191,11 +211,12 @@ public class AuthenticationService {
             refreshTokenRepository.delete(refreshToken);
             throw new UnauthorizedException(ErrorMessage.REFRESH_TOKEN_EXPIRED);
         }
-        refreshToken.setRevoked(true);
+//        refreshToken.setRevoked(true);
+        refreshTokenRepository.delete(refreshToken);
         User user = refreshToken.getUser();
         String token = generateToken(user);
         RefreshToken newRefreshToken = createRefreshToken(user);
-        refreshTokenRepository.save(refreshToken);
+//        refreshTokenRepository.save(refreshToken);
         return AuthenticationResponse.builder()
                 .accessToken(token)
                 .refreshToken(newRefreshToken.getToken())

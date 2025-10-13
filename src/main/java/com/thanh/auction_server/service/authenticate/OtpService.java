@@ -1,4 +1,4 @@
-package com.thanh.auction_server.service;
+package com.thanh.auction_server.service.authenticate;
 
 import com.thanh.auction_server.entity.User;
 import lombok.AccessLevel;
@@ -27,6 +27,24 @@ public class OtpService {
 
     public boolean verifyOtp(User user, String otp) {
         String key = "otp:" + user.getId() + ":EMAIL_VERIFICATION";
+        String storedOtp = redisTemplate.opsForValue().get(key);
+
+        if (storedOtp.equals(otp)) {
+            redisTemplate.delete(key);
+            return true;
+        }
+        return false;
+    }
+
+    public String generateAndSavePasswordResetOtp(User user) {
+        String otp = generateOtp();
+        String key = "otp:" + user.getId() + ":PASSWORD_RESET";
+        redisTemplate.opsForValue().set(key, otp, 5, TimeUnit.MINUTES);
+        return otp;
+    }
+
+    public boolean verifyPasswordResetOtp(User user, String otp) {
+        String key = "otp:" + user.getId() + ":PASSWORD_RESET";
         String storedOtp = redisTemplate.opsForValue().get(key);
 
         if (storedOtp.equals(otp)) {

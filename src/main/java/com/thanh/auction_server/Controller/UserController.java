@@ -1,12 +1,9 @@
 package com.thanh.auction_server.Controller;
 
-import com.thanh.auction_server.dto.request.PasswordCreationRequest;
-import com.thanh.auction_server.dto.request.UserCreationRequest;
-import com.thanh.auction_server.dto.request.UserUpdateRequest;
+import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.UserResponse;
-import com.thanh.auction_server.entity.User;
-import com.thanh.auction_server.service.UserService;
+import com.thanh.auction_server.service.authenticate.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -64,6 +61,21 @@ public class UserController {
         UserResponse user = userService.getUser(id);
         userService.deleteUser(id);
         return ResponseEntity.ok().body("User '" + user.getUsername() + "' deleted successfully");
+    }
+
+    @PostMapping("/change-password")
+    ResponseEntity<MessageResponse> changePassword(@RequestBody ChangePassRequest request) {
+        return ResponseEntity.ok(userService.changePassword(request));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(@RequestBody @Validated ForgotPassRequest request) {
+        return ResponseEntity.ok(userService.forgotPassword(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(@RequestBody @Validated ResetPassRequest request) {
+        return ResponseEntity.ok(userService.resetPassword(request));
     }
 
 }

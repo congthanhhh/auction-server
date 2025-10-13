@@ -1,4 +1,4 @@
-package com.thanh.auction_server.service;
+package com.thanh.auction_server.service.utils;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;

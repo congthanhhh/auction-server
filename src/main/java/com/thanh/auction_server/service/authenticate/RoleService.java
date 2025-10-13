@@ -1,4 +1,4 @@
-package com.thanh.auction_server.service;
+package com.thanh.auction_server.service.authenticate;
 
 import com.thanh.auction_server.dto.request.RoleRequest;
 import com.thanh.auction_server.dto.response.RoleResponse;

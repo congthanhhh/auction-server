@@ -1,19 +1,20 @@
-package com.thanh.auction_server.service;
+package com.thanh.auction_server.service.authenticate;
 
 import com.thanh.auction_server.constants.RoleEnum;
-import com.thanh.auction_server.dto.request.PasswordCreationRequest;
-import com.thanh.auction_server.dto.request.UserCreationRequest;
-import com.thanh.auction_server.dto.request.UserUpdateRequest;
+import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.UserResponse;
 import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.exception.UserAlreadyExistsException;
 import com.thanh.auction_server.exception.UserNotFoundException;
 import com.thanh.auction_server.mapper.UserMapper;
+import com.thanh.auction_server.repository.RefreshTokenRepository;
 import com.thanh.auction_server.repository.RoleRepository;
 import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.service.utils.EmailService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -37,11 +38,13 @@ public class UserService {
     UserMapper userMapper;
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
+    RefreshTokenRepository refreshTokenRepository;
     OtpService otpService;
     EmailService emailService;
 
     public UserResponse createUser(UserCreationRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) throw new UserAlreadyExistsException(ErrorMessage.USER_ALREADY_EXIST);
+        if (userRepository.existsByUsername(request.getUsername()))
+            throw new UserAlreadyExistsException(ErrorMessage.USER_ALREADY_EXIST);
 
         User user = userMapper.toUser(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -149,6 +152,46 @@ public class UserService {
         userResponse.setNoPassword(!StringUtils.hasText(user.getPassword()));
 
         return userResponse;
+    }
+
+    @Transactional
+    public MessageResponse changePassword(ChangePassRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByUsername(username).orElseThrow(
+                () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new UnauthorizedException(ErrorMessage.CURRENT_PASSWORD_INCORRECT);
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        refreshTokenRepository.deleteByUser(user);
+        return MessageResponse.builder().message("Password changed successfully").build();
+    }
+
+    public MessageResponse forgotPassword(ForgotPassRequest request) {
+        var userOptional = userRepository.findByEmail(request.getEmail());
+        if (userOptional.isPresent() && userOptional.get().getIsActive()) {
+            User user = userOptional.get();
+            String otp = otpService.generateAndSavePasswordResetOtp(user);
+            emailService.sendOtpEmail(user.getEmail(), otp);
+        }
+        return MessageResponse.builder()
+                .message("Nếu email của bạn tồn tại trong hệ thống, chúng tôi đã gửi một mã OTP để đặt lại mật khẩu.")
+                .build();
+    }
+
+    public MessageResponse resetPassword(ResetPassRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        if (!otpService.verifyPasswordResetOtp(user, request.getOtp())) {
+            throw new UnauthorizedException(ErrorMessage.INVALID_OTP);
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        return MessageResponse.builder()
+                .message("Đặt lại mật khẩu thành công.")
+                .build();
     }
 
 }
