@@ -3,6 +3,7 @@ package com.thanh.auction_server.service.authenticate;
 import com.thanh.auction_server.constants.RoleEnum;
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.MessageResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.dto.response.UserResponse;
 import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
@@ -19,6 +20,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -122,6 +127,23 @@ public class UserService {
                 userRepository.findById(id).orElseThrow(
                         () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND))
         );
+    }
+
+    public PageResponse<UserResponse> getUsersPagination(int page, int size) {
+//        Sort sort = Sort.by("createdAt").ascending();
+        Pageable pageable = PageRequest.of(page - 1, size /*sort*/);
+        Page<User> pageData = userRepository.findAll(pageable);
+        return PageResponse.<UserResponse>builder()
+                .currentPage(page)
+                .totalPages(pageData.getTotalPages())
+                .pageSize(pageData.getSize())
+                .totalElements(pageData.getTotalElements())
+                .data(pageData.getContent().stream().map(user -> {
+                    var userResponse = userMapper.toUserResponse(user);
+                    userResponse.setNoPassword(!StringUtils.hasText(user.getPassword()));
+                    return userResponse;
+                }).toList())
+                .build();
     }
 
     @PreAuthorize("hasRole('ADMIN')")

@@ -2,6 +2,7 @@ package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.MessageResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.dto.response.UserResponse;
 import com.thanh.auction_server.service.authenticate.UserService;
 import lombok.AccessLevel;
@@ -52,8 +53,10 @@ public class UserController {
     }
 
     @GetMapping
-    ResponseEntity<List<UserResponse>> getUsers() {
-        return ResponseEntity.ok(userService.getUsers());
+    ResponseEntity<PageResponse<UserResponse>> getUsers(
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
+        return ResponseEntity.<PageResponse<UserResponse>>ok(userService.getUsersPagination(page, size));
     }
 
     @DeleteMapping("/delete/{id}")

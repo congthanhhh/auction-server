@@ -12,6 +12,8 @@ public class ErrorMessage {
     public static final String INVALID_TOKEN = "In-valid token.";
     public static final String INVALID_OTP = "Invalid or expired OTP.";
     public static final String CURRENT_PASSWORD_INCORRECT = "Current password is incorrect.";
+    public static final String CATEGORY_ALREADY_EXIST = "Category already exists.";
+    public static final String CATEGORY_NOT_FOUND = "Category not found.";
 
 
 }
