@@ -4,7 +4,8 @@ import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.dto.request.CategoryRequest;
 import com.thanh.auction_server.dto.response.CategoryResponse;
 import com.thanh.auction_server.entity.Category;
-import com.thanh.auction_server.exception.CategoryException;
+import com.thanh.auction_server.exception.DataConflictException;
+import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.mapper.CategoryMapper;
 import com.thanh.auction_server.repository.CategoryRepository;
 import lombok.AccessLevel;
@@ -27,7 +28,7 @@ public class CategoryService {
 
     public CategoryResponse createCategory(CategoryRequest request) {
         if (categoryRepository.existsByName(request.getName())) {
-            throw new CategoryException(ErrorMessage.CATEGORY_ALREADY_EXIST);
+            throw new DataConflictException(ErrorMessage.CATEGORY_ALREADY_EXIST);
         }
         Category category = categoryMapper.toCategory(request);
         return categoryMapper.toCategoryResponse(categoryRepository.save(category));
@@ -42,10 +43,10 @@ public class CategoryService {
 
     public CategoryResponse updateCategory(Long id, CategoryRequest request) {
         Category existingCategory = categoryRepository.findById(id)
-                .orElseThrow(() -> new CategoryException(ErrorMessage.CATEGORY_NOT_FOUND + id));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + id));
         if (!existingCategory.getName().equals(request.getName())
                 && categoryRepository.existsByName(request.getName())) {
-            throw new CategoryException(ErrorMessage.CATEGORY_ALREADY_EXIST);
+            throw new DataConflictException(ErrorMessage.CATEGORY_ALREADY_EXIST);
         }
         categoryMapper.updateCategory(existingCategory, request);
         Category updatedCategory = categoryRepository.save(existingCategory);
@@ -56,7 +57,7 @@ public class CategoryService {
     @Transactional
     public void deleteCategory(Long id) {
         if (!categoryRepository.existsById(id)) {
-            throw new CategoryException(ErrorMessage.CATEGORY_NOT_FOUND + id);
+            throw new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + id);
         }
         categoryRepository.deleteById(id);
     }

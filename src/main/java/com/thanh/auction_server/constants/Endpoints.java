@@ -7,6 +7,10 @@ public final class Endpoints {
             "/products/**",
             "/bids/**",
             "/auctions/**",
+
+//           test api
+            "/images/**",
+            "/products/**",
     };
 
     public static final String[] PUBLIC_POST_ENDPOINTS = {
@@ -19,9 +23,10 @@ public final class Endpoints {
             "/users/reset-password",
             "/users/otp",
             "/categories/**",
+
+            // test api
+            "/images/**",
             "/products/**",
-            "/bids/**",
-            "/auctions/**",
 
     };
 }

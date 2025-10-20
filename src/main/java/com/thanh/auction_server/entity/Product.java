@@ -35,6 +35,10 @@ public class Product {
 
     LocalDateTime createdAt;
 
+    @Builder.Default
+    @Column(columnDefinition = "BOOLEAN DEFAULT TRUE")
+    Boolean isActive = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     Category category;

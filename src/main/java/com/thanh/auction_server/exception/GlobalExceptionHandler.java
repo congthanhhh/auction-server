@@ -17,13 +17,13 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 ex.getClass().getSimpleName()
         );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        return ResponseEntity.status(err.getStatus()).body(err);
     }
 
     @ExceptionHandler(UserAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleUserAlreadyExistsException(UserAlreadyExistsException ex) {
         ErrorResponse err = new ErrorResponse(HttpStatus.NOT_FOUND.value(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
+        return ResponseEntity.status(err.getStatus()).body(err);
     }
 
     @ExceptionHandler(UserNotFoundException.class)
@@ -38,17 +38,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
     }
 
-    @ExceptionHandler(CategoryException.class)
-    public ResponseEntity<ErrorResponse> handleCategoryException(CategoryException ex) {
-        ErrorResponse err = new ErrorResponse(HttpStatus.BAD_REQUEST.value(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFoundException (ResourceNotFoundException ex) {
+        ErrorResponse err = new ErrorResponse(HttpStatus.NOT_FOUND.value(), ex.getMessage());
+        return ResponseEntity.status(err.getStatus()).body(err);
+    }
+
+    @ExceptionHandler(DataConflictException.class)
+    public ResponseEntity<ErrorResponse> handleDataConflictException(DataConflictException ex) {
+        ErrorResponse err = new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage());
+        return ResponseEntity.status(err.getStatus()).body(err);
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAuthorizationDeniedException(AuthorizationDeniedException ex) {
         ErrorResponse err = new ErrorResponse(
                 HttpStatus.FORBIDDEN.value(), "You do not have permission to access this resource");
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(err);
+        return ResponseEntity.status(err.getStatus()).body(err);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
