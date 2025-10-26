@@ -2,7 +2,10 @@ package com.thanh.auction_server.mapper;
 
 import com.thanh.auction_server.dto.request.UserCreationRequest;
 import com.thanh.auction_server.dto.request.UserUpdateRequest;
+import com.thanh.auction_server.dto.response.SimpleProductResponse;
+import com.thanh.auction_server.dto.response.SimpleUserResponse;
 import com.thanh.auction_server.dto.response.UserResponse;
+import com.thanh.auction_server.entity.Product;
 import com.thanh.auction_server.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -17,4 +20,8 @@ public interface UserMapper {
 
     @Mapping(target = "roles", ignore = true)
     void updateUser(@MappingTarget User user, UserUpdateRequest request);
+
+    SimpleProductResponse productToSimpleProductResponse(Product product);
+
+    SimpleUserResponse userToSimpleUserResponse(User user);
 }
