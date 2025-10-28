@@ -24,6 +24,4 @@ public interface BidMapper {
     @Mapping(target = "displayedAmount", ignore = true) // Không map amount trực tiếp, cần xử lý logic
     BidResponse toBidResponse(Bid bid);
 
-    // Hàm trợ giúp map User -> SimpleUserResponse (Có thể dùng lại)
-    SimpleUserResponse userToSimpleUserResponse(User user);
 }

@@ -10,6 +10,7 @@ import com.thanh.auction_server.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.Named;
 
 @Mapper(componentModel = "spring")
 public interface UserMapper {
@@ -21,7 +22,6 @@ public interface UserMapper {
     @Mapping(target = "roles", ignore = true)
     void updateUser(@MappingTarget User user, UserUpdateRequest request);
 
-    SimpleProductResponse productToSimpleProductResponse(Product product);
-
+    @Named("userToSimpleUserResponse")
     SimpleUserResponse userToSimpleUserResponse(User user);
 }

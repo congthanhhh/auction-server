@@ -2,6 +2,7 @@ package com.thanh.auction_server.service.auction;
 
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.dto.request.BidRequest;
+import com.thanh.auction_server.dto.response.BidResponse;
 import com.thanh.auction_server.entity.Bid;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
@@ -59,7 +60,7 @@ public class BidService {
         return currentPrice.add(calculateIncrement(currentPrice));
     }
 
-    public void placeBid(Long auctionSessionId,BidRequest request) {
+    public BidResponse placeBid(Long auctionSessionId, BidRequest request) {
         var session = auctionSessionRepository.findById(auctionSessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND));
 
@@ -154,7 +155,7 @@ public class BidService {
 
         log.info("Bid placed successfully by User {} for session {}. Amount (Max Bid): {}", bidder.getUsername(), auctionSessionId, newMaxBid);
 
-        // return bidMapper.toBidResponse(newBid); // Trả về bid vừa tạo nếu cần
+         return bidMapper.toBidResponse(newBid);
 
     }
 }

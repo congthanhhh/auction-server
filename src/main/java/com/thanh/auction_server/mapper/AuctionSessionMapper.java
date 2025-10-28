@@ -26,15 +26,10 @@ public interface AuctionSessionMapper {
     @Mapping(target = "updatedAt", ignore = true)
     AuctionSession toAuctionSession(AuctionSessionRequest request);
 
-    @Mapping(source = "product", target = "product") // Cần hàm map Product -> SimpleProductResponse
-    @Mapping(source = "highestBidder", target = "highestBidder") // Cần hàm map User -> SimpleUserResponse
+    @Mapping(source = "product", target = "product", qualifiedByName = "productToSimpleProductResponse") // Cần hàm map Product -> SimpleProductResponse
+    @Mapping(source = "highestBidder", target = "highestBidder", qualifiedByName = "userToSimpleUserResponse") // Cần hàm map User -> SimpleUserResponse
     AuctionSessionResponse toAuctionSessionResponse(AuctionSession auctionSession);
 
-    // Hàm trợ giúp map Product -> SimpleProductResponse
-    SimpleProductResponse productToSimpleProductResponse(Product product);
-
-    // Hàm trợ giúp map User -> SimpleUserResponse (Có thể dùng lại từ ProductMapper nếu có)
-    SimpleUserResponse userToSimpleUserResponse(User user);
 
     // Map để cập nhật (ít dùng cho session, chủ yếu là cập nhật status, price)
     // void updateAuctionSession(@MappingTarget AuctionSession session, AuctionSessionRequest request);

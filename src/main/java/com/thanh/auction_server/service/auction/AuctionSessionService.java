@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,9 +71,15 @@ public class AuctionSessionService {
         return auctionSessionMapper.toAuctionSessionResponse(savedSession);
     }
 
-    public PageResponse<AuctionSessionResponse> getAllAuctionSessions(int page, int size) {
+    public PageResponse<AuctionSessionResponse> getAllAuctionSessions(AuctionStatus status,int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
-        Page<AuctionSession> sessionPage = auctionSessionRepository.findAll(pageable);
+        Specification<AuctionSession> spec = (root, query, cb) -> {
+            if (status != null) {
+                return cb.equal(root.get("status"), status);
+            }
+            return cb.conjunction();
+        };
+        Page<AuctionSession> sessionPage = auctionSessionRepository.findAll(spec, pageable);
         return PageResponse.<AuctionSessionResponse>builder()
                 .currentPage(page)
                 .totalPages(sessionPage.getTotalPages())

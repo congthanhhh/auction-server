@@ -5,11 +5,13 @@ import com.thanh.auction_server.entity.AuctionSession;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-public interface AuctionSessionRepository extends JpaRepository<AuctionSession, Long> {
+public interface AuctionSessionRepository extends JpaRepository<AuctionSession, Long>,
+        JpaSpecificationExecutor<AuctionSession> {
 
     // Tìm các phiên đấu giá theo trạng thái (có phân trang)
     Page<AuctionSession> findByStatus(AuctionStatus status, Pageable pageable);
