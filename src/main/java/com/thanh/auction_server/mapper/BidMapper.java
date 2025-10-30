@@ -21,7 +21,7 @@ public interface BidMapper {
     // Map từ Entity sang Response
     @Mapping(source = "user", target = "user") // Cần hàm map User -> SimpleUserResponse
     @Mapping(source = "auctionSession.id", target = "auctionSessionId") // Lấy ID của session
-    @Mapping(target = "displayedAmount", ignore = true) // Không map amount trực tiếp, cần xử lý logic
+    @Mapping(source = "resultingPrice", target = "displayedAmount")
     BidResponse toBidResponse(Bid bid);
 
 }

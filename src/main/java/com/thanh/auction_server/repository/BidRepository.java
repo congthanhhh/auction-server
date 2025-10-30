@@ -21,5 +21,5 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
     List<Bid> findHighestBidsForSession(Long sessionId, Pageable pageable); // Pageable(0, 1) để lấy top 1
 
     // Đếm số lượng bid cho một phiên
-    // long countByAuctionSessionId(Long auctionSessionId);
+     long countByAuctionSessionId(Long auctionSessionId);
 }

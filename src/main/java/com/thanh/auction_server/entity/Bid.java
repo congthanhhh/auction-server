@@ -22,6 +22,9 @@ public class Bid {
     @Column(nullable = false, precision = 19, scale = 2)
     BigDecimal amount;
 
+    @Column(precision = 19, scale = 2)
+    private BigDecimal resultingPrice;
+
     @Column(nullable = false)
     LocalDateTime bidTime;
 

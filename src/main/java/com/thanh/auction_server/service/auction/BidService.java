@@ -1,8 +1,10 @@
 package com.thanh.auction_server.service.auction;
 
+import com.thanh.auction_server.constants.AuctionStatus;
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.dto.request.BidRequest;
 import com.thanh.auction_server.dto.response.BidResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.Bid;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
@@ -15,11 +17,16 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -33,7 +40,7 @@ public class BidService {
 
     private BigDecimal calculateIncrement(BigDecimal currentPrice) {
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.valueOf(10000);
+            return BigDecimal.valueOf(5000);
         }
 
         double price = currentPrice.doubleValue();
@@ -61,6 +68,7 @@ public class BidService {
     }
 
     public BidResponse placeBid(Long auctionSessionId, BidRequest request) {
+        LocalDateTime now = LocalDateTime.now();
         var session = auctionSessionRepository.findById(auctionSessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND));
 
@@ -68,9 +76,15 @@ public class BidService {
         var bidder = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND));
 
-//        if(session.getProduct().getSeller().getId().equals(bidder.getId())){
-//            throw new DataConflictException("Seller cannot place bid on their own product.");
-//        }
+        if (session.getStatus() != AuctionStatus.ACTIVE) {
+            throw new ResourceNotFoundException("Phiên đấu giá không hoạt động.");
+        }
+        if (now.isAfter(session.getEndTime())) {
+            throw new ResourceNotFoundException("Phiên đấu giá đã kết thúc.");
+        }
+        if (session.getProduct().getSeller().getId().equals(bidder.getId())) {
+            throw new DataConflictException("Người bán không được tham gia đấu giá sản phẩm của mình.");
+        }
         BigDecimal currentPrice = session.getCurrentPrice();
         BigDecimal minimumNextBid = calculateMinimumNextBid(currentPrice);
         BigDecimal newMaxBid = request.getAmount();
@@ -90,28 +104,47 @@ public class BidService {
             } else {
                 throw new DataConflictException("Giá đặt mới phải cao hơn giá đặt tối đa hiện tại của bạn (" + currentHighestMaxBid + " VND)");
             }
-        // TH2: Other user bid or bid lan dau
+            // TH2: Other user bid or bid lan dau
         } else {
-            if(newMaxBid.compareTo(currentHighestMaxBid)>0){
+            if (newMaxBid.compareTo(currentHighestMaxBid) > 0) {
                 session.setHighestBidder(bidder);
                 session.setHighestMaxBid(newMaxBid);
 
                 // Tính giá hiển thị mới: Max Bid cũ + Bước giá tại mức Max Bid cũ
-                BigDecimal incrementAtOldMax = calculateIncrement(currentHighestMaxBid);
-                BigDecimal newCurrentPrice = currentHighestMaxBid.add(incrementAtOldMax);
-                if (newCurrentPrice.compareTo(newMaxBid) > 0) {
-                    newCurrentPrice = newMaxBid;
+                BigDecimal baseForIncrement = currentHighestMaxBid.compareTo(BigDecimal.ZERO) > 0
+                        ? currentHighestMaxBid
+                        : session.getStartPrice();
+
+                BigDecimal incrementAtBase = calculateIncrement(baseForIncrement);
+                BigDecimal newCurrentPriceProxy = baseForIncrement.add(incrementAtBase);
+                if (newCurrentPriceProxy.compareTo(newMaxBid) > 0) {
+                    newCurrentPriceProxy = newMaxBid;
                 }
-                session.setCurrentPrice(newCurrentPrice);
+                // Check reserve price
+                BigDecimal reservePrice = session.getReservePrice();
+                boolean reserveMetBefore = (reservePrice != null && currentHighestMaxBid.compareTo(reservePrice) >= 0);
+                BigDecimal finalNewCurrentPrice = newCurrentPriceProxy; // Giá cuối cùng sẽ được set
+                boolean reserveMetNow = (reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0);
+                if (reservePrice != null && reserveMetNow && !reserveMetBefore) {
+                    // Nếu giá sàn được ĐẠT LẦN ĐẦU TIÊN bởi bid này
+                    log.info("Reserve price ({}) met for the first time by new max bid ({}) in session {}", reservePrice, newMaxBid, auctionSessionId);
+                    // Giá hiển thị phải ít nhất bằng giá sàn
+                    if (reservePrice.compareTo(finalNewCurrentPrice) > 0) {
+                        finalNewCurrentPrice = reservePrice;
+                        log.info("Adjusting current price to meet reserve price: {} VND", finalNewCurrentPrice);
+                    }
+                    // TODO: Gửi thông báo "Giá sàn đã đạt" qua WebSocket
+                }
+
+                session.setCurrentPrice(finalNewCurrentPrice);
                 log.info("New highest bidder for session {}: User {}. New Max Bid: {}. New Current Price: {} VND",
-                        auctionSessionId, bidder.getUsername(), newMaxBid, newCurrentPrice);
-                // ... (Gửi thông báo cho người thắng cũ) ...
+                        auctionSessionId, bidder.getUsername(), newMaxBid, finalNewCurrentPrice);
+                // TODO: Gửi thông báo "Bạn đã bị vượt qua" cho người thắng cũ qua WebSocket
             } else {
                 // Không đủ để thắng, chỉ đẩy giá người hiện tại lên
                 // Giá hiển thị mới: Max Bid mới + Bước giá tại mức Max Bid mới
                 BigDecimal incrementAtNewBid = calculateIncrement(newMaxBid);
                 BigDecimal newCurrentPrice = newMaxBid.add(incrementAtNewBid);
-
                 if (newCurrentPrice.compareTo(currentHighestMaxBid) > 0) {
                     newCurrentPrice = currentHighestMaxBid;
                 }
@@ -120,30 +153,20 @@ public class BidService {
                         bidder.getUsername(), newMaxBid, auctionSessionId, newCurrentPrice);
             }
         }
-        // --- KIỂM TRA GIÁ SÀN (RESERVE PRICE) ---
-        // Chỉ kiểm tra khi có người thắng mới hoặc đây là bid đầu tiên
-        BigDecimal reservePrice = session.getReservePrice();
-        if (reservePrice != null && session.getCurrentPrice().compareTo(reservePrice) >= 0) {
-            // Nếu giá hiện tại đạt hoặc vượt giá sàn
-            // Logic bổ sung nếu cần thông báo "Giá sàn đã đạt"
-            log.debug("Reserve price met for session {}", auctionSessionId);
-        }
-
         // --- VÔ HIỆU HÓA BUY IT NOW (NẾU CÓ BID ĐẦU TIÊN) ---
-        if (session.getBuyNowPrice() != null && session.getBids().isEmpty()) {
+        boolean isFirstBid = bidRepository.countByAuctionSessionId(auctionSessionId) == 0;
+        if (session.getBuyNowPrice() != null && isFirstBid) {
             log.info("First bid placed for session {}. Disabling Buy It Now price.", auctionSessionId);
-            session.setBuyNowPrice(null); // Vô hiệu hóa giá mua ngay
+            session.setBuyNowPrice(null);
         }
-
         // --- LƯU THAY ĐỔI ---
         // 1. Lưu bản ghi Bid
-        LocalDateTime now = LocalDateTime.now();
         Bid newBid = bidMapper.toBid(request);
         newBid.setUser(bidder);
         newBid.setAuctionSession(session);
         newBid.setBidTime(now);
-        // newBid.setPriceWhenBid(session.getCurrentPrice()); // Lưu giá hiện tại nếu cần
-        bidRepository.save(newBid);
+        newBid.setResultingPrice(session.getCurrentPrice());
+        Bid savedBid = bidRepository.save(newBid);
 
         // 2. Lưu AuctionSession đã cập nhật
         session.setUpdatedAt(now);
@@ -152,10 +175,28 @@ public class BidService {
         // --- GỬI THÔNG BÁO (WebSocket) ---
         // TODO: Gửi update về currentPrice, highestBidder cho các client đang xem phiên này
         // Gửi thông báo "Bạn đã bị vượt qua" cho previousHighestBidder (nếu isNewHighestBidder)
-
         log.info("Bid placed successfully by User {} for session {}. Amount (Max Bid): {}", bidder.getUsername(), auctionSessionId, newMaxBid);
 
-         return bidMapper.toBidResponse(newBid);
+        BidResponse bidResponse = bidMapper.toBidResponse(savedBid);
+        bidResponse.setDisplayedAmount(savedBid.getResultingPrice());
+        return bidResponse;
 
+    }
+
+    public PageResponse<BidResponse> getBidHistory(Long auctionSessionId, int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<Bid> bidPage = bidRepository.findByAuctionSessionIdOrderByBidTimeDesc(auctionSessionId, pageable);
+        List<BidResponse> bidResponses = bidPage.getContent()
+                .stream()
+                .map(bidMapper::toBidResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.<BidResponse>builder()
+                .currentPage(page)
+                .totalPages(bidPage.getTotalPages())
+                .pageSize(bidPage.getSize())
+                .totalElements(bidPage.getTotalElements())
+                .data(bidResponses)
+                .build();
     }
 }

@@ -2,6 +2,7 @@ package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.dto.request.BidRequest;
 import com.thanh.auction_server.dto.response.BidResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.service.auction.BidService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -21,5 +22,14 @@ public class BidController {
     public ResponseEntity<BidResponse> placeBid(@PathVariable Long sessionId,
                                                 @RequestBody @Valid BidRequest request) {
         return ResponseEntity.ok(bidService.placeBid(sessionId, request));
+    }
+
+    @GetMapping
+    public ResponseEntity<PageResponse<BidResponse>> getBidHistory(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
+        PageResponse<BidResponse> history = bidService.getBidHistory(sessionId, page, size);
+        return ResponseEntity.ok(history);
     }
 }
