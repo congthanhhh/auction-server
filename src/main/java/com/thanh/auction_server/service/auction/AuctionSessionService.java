@@ -35,6 +35,7 @@ public class AuctionSessionService {
     AuctionSessionRepository auctionSessionRepository;
     ProductRepository productRepository;
     AuctionSessionMapper auctionSessionMapper;
+    NotificationService notificationService;
 
     @Transactional
     public AuctionSessionResponse createAuctionSession(AuctionSessionRequest request) {
@@ -117,21 +118,21 @@ public class AuctionSessionService {
         }
     }
 
-    @Transactional
-    public void endActiveAuctions() {
-        LocalDateTime now = LocalDateTime.now();
-        List<AuctionSession> sessionsToEnd = auctionSessionRepository
-                .findByStatusAndEndTimeLessThanEqual(AuctionStatus.ACTIVE, now);
-        if (!sessionsToEnd.isEmpty()) {
-            log.info("Found {} auction sessions to end.", sessionsToEnd.size());
-            for (AuctionSession session : sessionsToEnd) {
-                determineWinnerAndSetStatus(session); // Logic xác định người thắng
-                session.setUpdatedAt(now);
-                auctionSessionRepository.save(session);
-                // Gửi thông báo kết thúc, thông báo người thắng/thua
-            }
-        }
-    }
+//    @Transactional
+//    public void endActiveAuctions() {
+//        LocalDateTime now = LocalDateTime.now();
+//        List<AuctionSession> sessionsToEnd = auctionSessionRepository
+//                .findByStatusAndEndTimeLessThanEqual(AuctionStatus.ACTIVE, now);
+//        if (!sessionsToEnd.isEmpty()) {
+//            log.info("Found {} auction sessions to end.", sessionsToEnd.size());
+//            for (AuctionSession session : sessionsToEnd) {
+//                determineWinnerAndSetStatus(session); // Logic xác định người thắng
+//                session.setUpdatedAt(now);
+//                auctionSessionRepository.save(session);
+//                // Gửi thông báo kết thúc, thông báo người thắng/thua
+//            }
+//        }
+//    }
 
     // Hàm private để xử lý kết thúc phiên (Giai đoạn 4)
     private void determineWinnerAndSetStatus(AuctionSession session) {
@@ -151,4 +152,43 @@ public class AuctionSessionService {
             // TODO: Gửi thông báo cho người bán
         }
     }
+
+    @Transactional
+    public void endActiveAuctions() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuctionSession> sessionsToEnd = auctionSessionRepository
+                .findByStatusAndEndTimeLessThanEqual(AuctionStatus.ACTIVE, now);
+        for (AuctionSession session : sessionsToEnd) {
+            // 3. TÁCH BIẾN ĐỂ BIẾT TRẠNG THÁI TRƯỚC VÀ SAU
+            AuctionStatus statusBefore = session.getStatus();
+            determineWinnerAndSetStatus(session); // Logic xác định người thắng
+            session.setUpdatedAt(LocalDateTime.now());
+            auctionSessionRepository.save(session);
+
+            // 4. GỬI THÔNG BÁO SAU KHI XÁC ĐỊNH KẾT QUẢ
+            User seller = session.getProduct().getSeller();
+            String productName = session.getProduct().getName();
+            String productLink = "/products/" + session.getProduct().getId(); // Ví dụ
+
+            if (session.getStatus() == AuctionStatus.PENDING_PAYMENT) {
+                // Có người thắng
+                User winner = session.getHighestBidder();
+                // Gửi cho người thắng
+                String winMsg = String.format("Chúc mừng! Bạn đã thắng phiên đấu giá '%s' với giá %,.0f VND.", productName, session.getCurrentPrice());
+                String winLink = "/auctions/" + session.getId(); // Hoặc link tới trang thanh toán
+                notificationService.createNotification(winner, winMsg, winLink);
+                // Gửi cho người bán
+                String sellerWinMsg = String.format("Sản phẩm '%s' của bạn đã được bán thành công cho %s.", productName, winner.getUsername());
+                notificationService.createNotification(seller, sellerWinMsg, productLink);
+
+            } else if (session.getStatus() == AuctionStatus.FAILED) {
+                // Không có người thắng
+                // Gửi cho người bán
+                String sellerFailMsg = String.format("Phiên đấu giá '%s' của bạn đã kết thúc mà không có người thắng.", productName);
+                notificationService.createNotification(seller, sellerFailMsg, productLink);
+            }
+            // TODO (Sau này): Gửi thông báo WebSocket
+        }
+    }
+
 }

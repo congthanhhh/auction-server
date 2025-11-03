@@ -6,6 +6,7 @@ import com.thanh.auction_server.dto.request.BidRequest;
 import com.thanh.auction_server.dto.response.BidResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.Bid;
+import com.thanh.auction_server.entity.Product;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
@@ -37,6 +38,7 @@ public class BidService {
     BidMapper bidMapper;
     AuctionSessionRepository auctionSessionRepository;
     UserRepository userRepository;
+    NotificationService notificationService;
 
     private BigDecimal calculateIncrement(BigDecimal currentPrice) {
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
@@ -71,6 +73,8 @@ public class BidService {
         LocalDateTime now = LocalDateTime.now();
         var session = auctionSessionRepository.findById(auctionSessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND));
+        Product product = session.getProduct();
+
 
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         var bidder = userRepository.findByUsername(username)
@@ -82,7 +86,7 @@ public class BidService {
         if (now.isAfter(session.getEndTime())) {
             throw new ResourceNotFoundException("Phiên đấu giá đã kết thúc.");
         }
-        if (session.getProduct().getSeller().getId().equals(bidder.getId())) {
+        if (product.getSeller().getId().equals(bidder.getId())) {
             throw new DataConflictException("Người bán không được tham gia đấu giá sản phẩm của mình.");
         }
         BigDecimal currentPrice = session.getCurrentPrice();
@@ -96,6 +100,13 @@ public class BidService {
         User currentHighestBidder = session.getHighestBidder();
         BigDecimal currentHighestMaxBid =
                 session.getHighestMaxBid() != null ? session.getHighestMaxBid() : BigDecimal.ZERO;
+
+        BigDecimal reservePrice = session.getReservePrice();
+        boolean reserveMetBefore = (reservePrice != null && currentHighestMaxBid.compareTo(reservePrice) >= 0);
+        boolean reserveMetNow = (reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0);
+        User previousHighestBidder = currentHighestBidder;
+        boolean isNewHighestBidder = false;
+
         // TH1: User hiện tại là người dẫn đầu -> đặt giá cao hơn giá đặt tối đa hiện tại của họ
         if (currentHighestBidder != null && currentHighestBidder.getId().equals(bidder.getId())) {
             if (newMaxBid.compareTo(currentHighestMaxBid) > 0) {
@@ -107,9 +118,9 @@ public class BidService {
             // TH2: Other user bid or bid lan dau
         } else {
             if (newMaxBid.compareTo(currentHighestMaxBid) > 0) {
+                isNewHighestBidder = true;
                 session.setHighestBidder(bidder);
                 session.setHighestMaxBid(newMaxBid);
-
                 // Tính giá hiển thị mới: Max Bid cũ + Bước giá tại mức Max Bid cũ
                 BigDecimal baseForIncrement = currentHighestMaxBid.compareTo(BigDecimal.ZERO) > 0
                         ? currentHighestMaxBid
@@ -121,10 +132,7 @@ public class BidService {
                     newCurrentPriceProxy = newMaxBid;
                 }
                 // Check reserve price
-                BigDecimal reservePrice = session.getReservePrice();
-                boolean reserveMetBefore = (reservePrice != null && currentHighestMaxBid.compareTo(reservePrice) >= 0);
                 BigDecimal finalNewCurrentPrice = newCurrentPriceProxy; // Giá cuối cùng sẽ được set
-                boolean reserveMetNow = (reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0);
                 if (reservePrice != null && reserveMetNow && !reserveMetBefore) {
                     // Nếu giá sàn được ĐẠT LẦN ĐẦU TIÊN bởi bid này
                     log.info("Reserve price ({}) met for the first time by new max bid ({}) in session {}", reservePrice, newMaxBid, auctionSessionId);
@@ -167,18 +175,24 @@ public class BidService {
         newBid.setBidTime(now);
         newBid.setResultingPrice(session.getCurrentPrice());
         Bid savedBid = bidRepository.save(newBid);
-
         // 2. Lưu AuctionSession đã cập nhật
         session.setUpdatedAt(now);
         auctionSessionRepository.save(session);
-
         // --- GỬI THÔNG BÁO (WebSocket) ---
         // TODO: Gửi update về currentPrice, highestBidder cho các client đang xem phiên này
         // Gửi thông báo "Bạn đã bị vượt qua" cho previousHighestBidder (nếu isNewHighestBidder)
         log.info("Bid placed successfully by User {} for session {}. Amount (Max Bid): {}", bidder.getUsername(), auctionSessionId, newMaxBid);
-
         BidResponse bidResponse = bidMapper.toBidResponse(savedBid);
         bidResponse.setDisplayedAmount(savedBid.getResultingPrice());
+        sendBidNotifications(
+                savedBid,
+                bidder,
+                previousHighestBidder,
+                isNewHighestBidder,
+                reserveMetNow,
+                reserveMetBefore,
+                product
+        );
         return bidResponse;
 
     }
@@ -199,4 +213,67 @@ public class BidService {
                 .data(bidResponses)
                 .build();
     }
+
+    private void sendBidNotifications(
+            Bid savedBid,
+            User bidder,
+            User previousHighestBidder,
+            boolean isNewHighestBidder,
+            boolean reserveMetNow,
+            boolean reserveMetBefore,
+            Product product) {
+
+        String link = "/auctions/" + savedBid.getAuctionSession().getId();
+        String productName = product.getName();
+
+        if (isNewHighestBidder) {
+            // 1. thông báo cho NGƯỜI BỊ VƯỢT QUA
+            if (previousHighestBidder != null) {
+                String outbidMsg = String.format(
+                        "Bạn đã bị vượt qua trong phiên đấu giá '%s'!. Giá hiện tại: '%s'",
+                        productName,
+                        savedBid.getResultingPrice()
+                );
+                notificationService.createNotification(previousHighestBidder, outbidMsg, link);
+            }
+
+            // 2. thông báo cho NGƯỜI CHIẾN THẮNG MỚI
+            String winnerMsg;
+            if (reserveMetNow) {
+                // 2a. Người chiến thắng MỚI và giá sàn ĐÃ được đáp ứng
+                if (!reserveMetBefore) {
+                    // Người chiến thắng MỚI và giá sàn ĐƯỢC đáp ứng LẦN ĐẦU TIÊN
+                    winnerMsg = String.format(
+                            "Chúc mừng! Bạn là người đầu tiên đạt giá sàn cho '%s' và đang dẫn đầu với mức giá: '%s'.",
+                            productName, savedBid.getResultingPrice()
+                    );
+                } else {
+                    // Giai sàn đã được đáp ứng từ trước
+                    winnerMsg = String.format(
+                            "Bạn đang dẫn đầu phiên đấu giá '%s', mức giá hiện tại '%s'.",
+                            productName,
+                            savedBid.getResultingPrice()
+                    );
+                }
+            } else {
+                // 2b. Người chiến thắng MỚI nhưng giá sàn CHƯA được đáp ứng
+                winnerMsg = String.format(
+                        "Bạn đang dẫn đầu phiên đấu giá '%s', nhưng giá sàn chưa được đáp ứng.",
+                        productName
+                );
+            }
+            notificationService.createNotification(bidder, winnerMsg, link);
+        } else {
+            // B. Bid KHÔNG thành công do max bid không đủ cao
+            if (previousHighestBidder != null && !previousHighestBidder.getId().equals(bidder.getId())) {
+                String notEnoughMsg = String.format(
+                        "Giá bạn đặt cho '%s' chưa đủ cao. Bạn đã bị vượt qua, mức giá hiện tại: '%s'",
+                        productName,
+                        savedBid.getResultingPrice()
+                );
+                notificationService.createNotification(bidder, notEnoughMsg, link);
+            }
+        }
+    }
+
 }
