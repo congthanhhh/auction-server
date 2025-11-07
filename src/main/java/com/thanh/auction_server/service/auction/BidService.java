@@ -5,15 +5,18 @@ import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.dto.request.BidRequest;
 import com.thanh.auction_server.dto.response.BidResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
+import com.thanh.auction_server.dto.response.SimpleUserResponse;
 import com.thanh.auction_server.entity.Bid;
 import com.thanh.auction_server.entity.Product;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.mapper.BidMapper;
+import com.thanh.auction_server.mapper.UserMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
 import com.thanh.auction_server.repository.BidRepository;
 import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.service.utils.SocketIOService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -27,6 +30,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -38,7 +42,9 @@ public class BidService {
     BidMapper bidMapper;
     AuctionSessionRepository auctionSessionRepository;
     UserRepository userRepository;
+    UserMapper userMapper;
     NotificationService notificationService;
+    SocketIOService socketIOService;
 
     private BigDecimal calculateIncrement(BigDecimal currentPrice) {
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
@@ -167,23 +173,38 @@ public class BidService {
             log.info("First bid placed for session {}. Disabling Buy It Now price.", auctionSessionId);
             session.setBuyNowPrice(null);
         }
-        // --- LƯU THAY ĐỔI ---
-        // 1. Lưu bản ghi Bid
         Bid newBid = bidMapper.toBid(request);
         newBid.setUser(bidder);
         newBid.setAuctionSession(session);
         newBid.setBidTime(now);
         newBid.setResultingPrice(session.getCurrentPrice());
         Bid savedBid = bidRepository.save(newBid);
-        // 2. Lưu AuctionSession đã cập nhật
+        // 2. Lưu AuctionSession
         session.setUpdatedAt(now);
         auctionSessionRepository.save(session);
+
         // --- GỬI THÔNG BÁO (WebSocket) ---
-        // TODO: Gửi update về currentPrice, highestBidder cho các client đang xem phiên này
-        // Gửi thông báo "Bạn đã bị vượt qua" cho previousHighestBidder (nếu isNewHighestBidder)
-        log.info("Bid placed successfully by User {} for session {}. Amount (Max Bid): {}", bidder.getUsername(), auctionSessionId, newMaxBid);
+        log.info("Broadcasting WebSocket updates for session ID: {}", auctionSessionId);
+        String roomName = "session-" + auctionSessionId;
+        // A. Chuẩn bị dữ liệu cho Lịch sử Bid (Sự kiện "new_bid")
         BidResponse bidResponse = bidMapper.toBidResponse(savedBid);
         bidResponse.setDisplayedAmount(savedBid.getResultingPrice());
+
+        // B. Chuẩn bị dữ liệu cho Cập nhật giá (Sự kiện "price_update")
+        SimpleUserResponse highestBidderResponse = userMapper.userToSimpleUserResponse(session.getHighestBidder());
+        Map<String, Object> priceUpdateData = Map.of(
+                "currentPrice", savedBid.getResultingPrice(),
+                "highestBidder", highestBidderResponse
+        );
+        // C. Gửi 2 sự kiện đến phòng
+        // Gửi thông báo có bid mới cho lịch sử
+        socketIOService.sendMessageToRoom(roomName, SocketIOService.EVENT_NEW_BID, bidResponse);
+        // Gửi thông báo giá mới cho UI chính
+        socketIOService.sendMessageToRoom(roomName, SocketIOService.EVENT_PRICE_UPDATE, priceUpdateData);
+        // ------------------------------------
+
+        log.info("Bid placed and WebSocket events sent for session {}.", auctionSessionId);
+        // Gửi thông báo qua hệ thống Notification
         sendBidNotifications(
                 savedBid,
                 bidder,
@@ -194,7 +215,6 @@ public class BidService {
                 product
         );
         return bidResponse;
-
     }
 
     public PageResponse<BidResponse> getBidHistory(Long auctionSessionId, int page, int size) {

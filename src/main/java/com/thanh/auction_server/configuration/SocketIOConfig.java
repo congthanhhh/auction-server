@@ -2,6 +2,8 @@ package com.thanh.auction_server.configuration;
 
 import com.corundumstudio.socketio.Configuration;
 import com.corundumstudio.socketio.SocketIOServer;
+import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +28,7 @@ public class SocketIOConfig {
         config.setHostname(socketHost);
         config.setPort(socketPort);
         config.setOrigin("http://localhost:5173");
+        config.setJsonSupport(new JacksonJsonSupport(new JavaTimeModule())); // Hỗ trợ Java 8 Date/Time API
         this.server = new SocketIOServer(config);
         return this.server;
     }

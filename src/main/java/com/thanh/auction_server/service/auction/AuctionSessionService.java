@@ -103,7 +103,7 @@ public class AuctionSessionService {
 
     // Các phương thức cập nhật trạng thái (start, end) sẽ được gọi bởi Scheduled Job sau này
     @Transactional
-    public void startScheduledAuctions() {
+    public List<AuctionSession> startScheduledAuctions() {
         LocalDateTime now = LocalDateTime.now();
         List<AuctionSession> sessionsToStart = auctionSessionRepository
                 .findByStatusAndStartTimeLessThanEqual(AuctionStatus.SCHEDULED, now);
@@ -116,23 +116,8 @@ public class AuctionSessionService {
                 // Gửi thông báo (WebSocket/Email) cho người quan tâm (nếu có)
             }
         }
+        return sessionsToStart;
     }
-
-//    @Transactional
-//    public void endActiveAuctions() {
-//        LocalDateTime now = LocalDateTime.now();
-//        List<AuctionSession> sessionsToEnd = auctionSessionRepository
-//                .findByStatusAndEndTimeLessThanEqual(AuctionStatus.ACTIVE, now);
-//        if (!sessionsToEnd.isEmpty()) {
-//            log.info("Found {} auction sessions to end.", sessionsToEnd.size());
-//            for (AuctionSession session : sessionsToEnd) {
-//                determineWinnerAndSetStatus(session); // Logic xác định người thắng
-//                session.setUpdatedAt(now);
-//                auctionSessionRepository.save(session);
-//                // Gửi thông báo kết thúc, thông báo người thắng/thua
-//            }
-//        }
-//    }
 
     // Hàm private để xử lý kết thúc phiên (Giai đoạn 4)
     private void determineWinnerAndSetStatus(AuctionSession session) {
@@ -154,7 +139,7 @@ public class AuctionSessionService {
     }
 
     @Transactional
-    public void endActiveAuctions() {
+    public List<AuctionSession> endActiveAuctions() {
         LocalDateTime now = LocalDateTime.now();
         List<AuctionSession> sessionsToEnd = auctionSessionRepository
                 .findByStatusAndEndTimeLessThanEqual(AuctionStatus.ACTIVE, now);
@@ -188,7 +173,9 @@ public class AuctionSessionService {
                 notificationService.createNotification(seller, sellerFailMsg, productLink);
             }
             // TODO (Sau này): Gửi thông báo WebSocket
+
         }
+        return sessionsToEnd;
     }
 
 }

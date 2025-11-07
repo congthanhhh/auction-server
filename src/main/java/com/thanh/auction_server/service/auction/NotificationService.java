@@ -12,6 +12,7 @@ import com.thanh.auction_server.exception.UserNotFoundException;
 import com.thanh.auction_server.mapper.NotificationMapper;
 import com.thanh.auction_server.repository.NotificationRepository;
 import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.service.utils.SocketIOService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -33,8 +34,8 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
-    NotificationMapper notificationMapper;
-    // private final SocketIOService socketIOService; // Sẽ inject sau
+    private final NotificationMapper notificationMapper;
+    private final SocketIOService socketIOService;
 
     @Transactional
     public void createNotification(User user, String message, String link) {
@@ -46,12 +47,17 @@ public class NotificationService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        notificationRepository.save(notification);
+        Notification savedNotification = notificationRepository.save(notification);
         log.info("Notification saved for user {}: {}", user.getUsername(), message);
+        // Gọi WebSocket để gửi thông báo real-time
+        String userRoom = "user-" + user.getId();
+        NotificationResponse notificationResponse = notificationMapper.toNotificationResponse(savedNotification);
+        // Gửi sự kiện 'new_notification' đến phòng cá nhân của user đó
+        socketIOService.sendMessageToRoom(userRoom,
+                SocketIOService.EVENT_NEW_NOTIFICATION,
+                notificationResponse);
 
-        // TODO (Sau Bước 2): Gọi WebSocket
-        // String userRoom = "user-" + user.getId();
-        // socketIOService.sendMessageToRoom(userRoom, "new_notification", notificationMapper.toResponse(notification));
+        log.info("Sent WebSocket ping (new_notification) to room: {}", userRoom);
     }
 
     public PageResponse<NotificationResponse> getMyNotifications(int page, int size) {
