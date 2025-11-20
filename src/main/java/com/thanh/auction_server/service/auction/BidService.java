@@ -11,6 +11,7 @@ import com.thanh.auction_server.entity.Product;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
+import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.mapper.BidMapper;
 import com.thanh.auction_server.mapper.UserMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
@@ -86,6 +87,11 @@ public class BidService {
         var bidder = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND));
 
+        final int MAX_STRIKES_ALLOWED = 2;
+        if (bidder.getStrikeCount() != null && bidder.getStrikeCount() >= MAX_STRIKES_ALLOWED) {
+            log.warn("User {} (Strikes: {}) bị chặn đặt giá.", bidder.getUsername(), bidder.getStrikeCount());
+            throw new UnauthorizedException("Tài khoản của bạn đã bị cấm đấu giá do vi phạm không thanh toán.");
+        }
         if (session.getStatus() != AuctionStatus.ACTIVE) {
             throw new ResourceNotFoundException("Phiên đấu giá không hoạt động.");
         }

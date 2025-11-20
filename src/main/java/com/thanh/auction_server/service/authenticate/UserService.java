@@ -216,4 +216,18 @@ public class UserService {
                 .build();
     }
 
+    @Transactional
+    public void incrementStrikeCount(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + userId));
+
+        int currentStrikes = user.getStrikeCount() != null ? user.getStrikeCount() : 0;
+        user.setStrikeCount(currentStrikes + 1);
+        userRepository.save(user);
+
+        log.warn("User {} đã bị tăng điểm phạt lên {}.", user.getUsername(), user.getStrikeCount());
+
+        // notificationService.createNotification(user, "Bạn đã nhận 1 điểm phạt do không thanh toán.", "/my-strikes");
+    }
+
 }

@@ -36,6 +36,7 @@ public class AuctionSessionService {
     ProductRepository productRepository;
     AuctionSessionMapper auctionSessionMapper;
     NotificationService notificationService;
+    InvoiceService invoiceService;
 
     @Transactional
     public AuctionSessionResponse createAuctionSession(AuctionSessionRequest request) {
@@ -129,12 +130,14 @@ public class AuctionSessionService {
         if (winner != null && (reservePrice == null || finalMaxBid.compareTo(reservePrice) >= 0)) {
             session.setStatus(AuctionStatus.PENDING_PAYMENT);
             log.info("Auction session ID {} ended. Winner: {}. Final Price: {}", session.getId(), winner.getUsername(), session.getCurrentPrice());
-            // TODO: Tạo hóa đơn/order
-            // TODO: Gửi thông báo cho người thắng và người bán
+            invoiceService.createInvoiceForWinner(session, winner);
         } else {
             session.setStatus(AuctionStatus.FAILED); // Không có người thắng hợp lệ
             log.info("Auction session ID {} ended with no valid winner (No bids or reserve not met).", session.getId());
-            // TODO: Gửi thông báo cho người bán
+            if (reservePrice != null && finalMaxBid != null && finalMaxBid.compareTo(reservePrice) < 0) {
+                // Nếu phiên thất bại VÌ không đạt giá sàn
+                // invoiceService.createFeeInvoiceForSeller(session, "RESERVE_PRICE_FEE");
+            }
         }
     }
 

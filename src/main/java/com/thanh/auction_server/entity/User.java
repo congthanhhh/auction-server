@@ -27,6 +27,10 @@ public class User {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 
+    @Builder.Default
+    @Column(columnDefinition = "INT DEFAULT 0")
+    Integer strikeCount = 0;
+
     @ManyToMany
     Set<Role> roles;
 }

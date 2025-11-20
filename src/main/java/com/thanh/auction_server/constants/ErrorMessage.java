@@ -17,7 +17,7 @@ public class ErrorMessage {
     public static final String PRODUCT_NOT_FOUND = "Product not found.";
     public static final String AUCTION_SESSION_ALREADY_EXISTS_FOR_PRODUCT = "An auction session already exists for this product.";
     public static final String AUCTION_SESSION_NOT_FOUND = "Auction session not found.";
-    public static final String BID_NOT_FOUND = "Bid not found.";
+    public static final String INVOICE_NOT_FOUND = "Invoice not found.";
 
 
 }
