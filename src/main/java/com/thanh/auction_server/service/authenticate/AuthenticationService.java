@@ -203,9 +203,8 @@ public class AuthenticationService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
-        var oldRefreshToken = request.getRefreshToken();
-        var refreshToken = refreshTokenRepository.findByToken(oldRefreshToken)
+    public AuthenticationResponse refreshToken(String request) {
+        var refreshToken = refreshTokenRepository.findByToken(request)
                 .orElseThrow(() -> new UnauthorizedException(ErrorMessage.INVALID_REFRESH_TOKEN));
         if (refreshToken.getExpiryDate().isBefore(Instant.now()) || refreshToken.isRevoked()) {
             refreshTokenRepository.delete(refreshToken);

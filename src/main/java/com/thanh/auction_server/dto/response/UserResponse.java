@@ -14,7 +14,8 @@ import java.util.Set;
 public class UserResponse {
     String id;
     String username;
-    String fullName;
+    String firstName;
+    String lastName;
     boolean noPassword;
     String email;
     Boolean isActive = true;

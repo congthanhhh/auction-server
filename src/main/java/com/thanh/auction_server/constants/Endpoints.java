@@ -13,6 +13,7 @@ public final class Endpoints {
 
     public static final String[] PUBLIC_POST_ENDPOINTS = {
             "/auth/outbound/authenticate",
+            "/auth/introspect",
             "/auth/authenticate",
             "/auth/refresh-token",
             "/auth/verify-otp",

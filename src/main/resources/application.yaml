@@ -49,7 +49,7 @@ spring:
 
 jwt:
   signerKey: "${JWT_SIGNER_KEY}"
-  valid-duration: 1800 # in second (30 m)
+  valid-duration: 170 # in second (30 m)
   refreshable-duration: 604800 # in second (7 days)
 
 cloudinary:

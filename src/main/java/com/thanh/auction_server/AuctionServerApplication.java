@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableFeignClients
 @EnableAsync
-@EnableScheduling
+//@EnableScheduling
 public class AuctionServerApplication {
 
 	public static void main(String[] args) {
