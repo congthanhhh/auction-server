@@ -137,7 +137,17 @@ public class AuthenticationService {
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
-        var user = userRepository.findByUsername(request.getUsername())
+
+        String loginIdentifier = request.getUsername();
+        if (loginIdentifier == null || loginIdentifier.isBlank()) {
+            loginIdentifier = request.getEmail();
+        }
+
+        if (loginIdentifier == null || loginIdentifier.isBlank()) {
+            throw new UserNotFoundException(ErrorMessage.BLANK_USER_PASS);
+        }
+
+        var user = userRepository.findByUsernameOrEmail(loginIdentifier, loginIdentifier)
                 .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
 
         if (!user.getIsActive()) {

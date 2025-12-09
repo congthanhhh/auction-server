@@ -2,6 +2,7 @@ package com.thanh.auction_server.constants;
 
 public class ErrorMessage {
     public static final String USER_NOT_FOUND = "User not found.";
+    public static final String BLANK_USER_PASS = "Please enter username and password.";
     public static final String USER_ALREADY_EXIST = "User already exists.";
     public static final String EMAIL_ALREADY_EXIST = "Email already exists.";
     public static final String PASSWORD_ALREADY_EXIST = "Password already created.";

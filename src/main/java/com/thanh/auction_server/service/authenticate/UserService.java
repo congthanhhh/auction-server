@@ -227,6 +227,12 @@ public class UserService {
 
         log.warn("User {} đã bị tăng điểm phạt lên {}.", user.getUsername(), user.getStrikeCount());
 
+        if (user.getStrikeCount() >= 3) {
+            user.setIsActive(false);
+            userRepository.save(user);
+            log.warn("User {} đã bị khóa tài khoản do quá nhiều điểm phạt.", user.getUsername());
+        }
+
         // notificationService.createNotification(user, "Bạn đã nhận 1 điểm phạt do không thanh toán.", "/my-strikes");
     }
 

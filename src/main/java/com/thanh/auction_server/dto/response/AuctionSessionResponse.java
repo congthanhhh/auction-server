@@ -23,6 +23,7 @@ public class AuctionSessionResponse {
     AuctionStatus status;
     SimpleProductResponse product;
     SimpleUserResponse highestBidder;
+    boolean reservePriceMet;
 
     // Không trả về highestMaxBid (bí mật)
 

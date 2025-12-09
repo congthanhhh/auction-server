@@ -129,11 +129,9 @@ public class AuctionSessionService {
         // Kiểm tra điều kiện thắng: Có người bid VÀ Max Bid >= Giá sàn (nếu có)
         if (winner != null && (reservePrice == null || finalMaxBid.compareTo(reservePrice) >= 0)) {
             session.setStatus(AuctionStatus.PENDING_PAYMENT);
-            log.info("Auction session ID {} ended. Winner: {}. Final Price: {}", session.getId(), winner.getUsername(), session.getCurrentPrice());
             invoiceService.createInvoiceForWinner(session, winner);
         } else {
             session.setStatus(AuctionStatus.FAILED); // Không có người thắng hợp lệ
-            log.info("Auction session ID {} ended with no valid winner (No bids or reserve not met).", session.getId());
             if (reservePrice != null && finalMaxBid != null && finalMaxBid.compareTo(reservePrice) < 0) {
                 // Nếu phiên thất bại VÌ không đạt giá sàn
                 // invoiceService.createFeeInvoiceForSeller(session, "RESERVE_PRICE_FEE");

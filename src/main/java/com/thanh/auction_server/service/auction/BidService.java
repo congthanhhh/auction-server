@@ -198,9 +198,13 @@ public class BidService {
 
         // B. Chuẩn bị dữ liệu cho Cập nhật giá (Sự kiện "price_update")
         SimpleUserResponse highestBidderResponse = userMapper.userToSimpleUserResponse(session.getHighestBidder());
+        boolean isMet = session.getReservePrice() == null ||
+                savedBid.getResultingPrice().compareTo(session.getReservePrice()) >= 0;
+
         Map<String, Object> priceUpdateData = Map.of(
                 "currentPrice", savedBid.getResultingPrice(),
-                "highestBidder", highestBidderResponse
+                "highestBidder", highestBidderResponse,
+                "reservePriceMet", isMet // <--- THÊM VÀO ĐÂY
         );
         // C. Gửi 2 sự kiện đến phòng
         // Gửi thông báo có bid mới cho lịch sử

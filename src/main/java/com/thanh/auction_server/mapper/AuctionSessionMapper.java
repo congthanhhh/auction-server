@@ -28,10 +28,21 @@ public interface AuctionSessionMapper {
 
     @Mapping(source = "product", target = "product", qualifiedByName = "productToSimpleProductResponse") // Cần hàm map Product -> SimpleProductResponse
     @Mapping(source = "highestBidder", target = "highestBidder", qualifiedByName = "userToSimpleUserResponse") // Cần hàm map User -> SimpleUserResponse
+    @Mapping(target = "reservePriceMet", expression = "java(calculateReserveMet(auctionSession))")
     AuctionSessionResponse toAuctionSessionResponse(AuctionSession auctionSession);
 
 
     // Map để cập nhật (ít dùng cho session, chủ yếu là cập nhật status, price)
     // void updateAuctionSession(@MappingTarget AuctionSession session, AuctionSessionRequest request);
+
+
+    default boolean calculateReserveMet(AuctionSession session) {
+        // Nếu không có giá sàn -> Mặc định là Đạt (hoặc tùy logic của bạn)
+        if (session.getReservePrice() == null) {
+            return true;
+        }
+        // Nếu giá hiện tại >= giá sàn -> True
+        return session.getCurrentPrice().compareTo(session.getReservePrice()) >= 0;
+    }
 
 }
