@@ -55,9 +55,9 @@ public class AuctionSessionService {
         if(request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(product.getStartPrice())<=0){
             throw new DataConflictException("Buy now price must be greater than starting price.");
         }
-        if(request.getReservePrice() != null && request.getReservePrice().compareTo(product.getStartPrice())<=0){
-            throw new DataConflictException("Reserve price must be greater than or equal to starting price.");
-        }
+//        if(request.getReservePrice() != null && request.getReservePrice().compareTo(product.getStartPrice())<=0){
+//            throw new DataConflictException("Reserve price must be greater than or equal to starting price.");
+//        }
         if(request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(request.getReservePrice())<=0){
             throw new DataConflictException("Buy now price must be greater than or equal to reserve price.");
         }

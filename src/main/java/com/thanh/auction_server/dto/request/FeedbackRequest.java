@@ -11,7 +11,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class FeedBackRequest {
+public class FeedbackRequest {
     @NotNull(message = "Bạn chưa chấm điểm sao")
     @Min(value = 1, message = "Tối thiểu 1 sao")
     @Max(value = 5, message = "Tối đa 5 sao")

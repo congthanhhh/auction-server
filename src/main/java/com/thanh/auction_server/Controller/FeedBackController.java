@@ -1,6 +1,6 @@
 package com.thanh.auction_server.Controller;
 
-import com.thanh.auction_server.dto.request.FeedBackRequest;
+import com.thanh.auction_server.dto.request.FeedbackRequest;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.service.auction.FeedbackService;
 import jakarta.validation.Valid;
@@ -21,7 +21,7 @@ public class FeedBackController {
     @PostMapping("/invoice/{invoiceId}")
     public ResponseEntity<MessageResponse> createFeedback(
             @PathVariable Long invoiceId,
-            @RequestBody @Valid FeedBackRequest request) {
+            @RequestBody @Valid FeedbackRequest request) {
         return ResponseEntity.ok(feedbackService.createFeedback(invoiceId, request));
     }
 }

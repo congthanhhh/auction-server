@@ -1,10 +1,9 @@
 package com.thanh.auction_server.service.auction;
 
-import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.constants.InvoiceStatus;
-import com.thanh.auction_server.dto.request.FeedBackRequest;
+import com.thanh.auction_server.dto.request.FeedbackRequest;
 import com.thanh.auction_server.dto.response.MessageResponse;
-import com.thanh.auction_server.entity.FeedBack;
+import com.thanh.auction_server.entity.Feedback;
 import com.thanh.auction_server.entity.Invoice;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
@@ -71,7 +70,7 @@ public class FeedbackService {
         User toUser = isBuyerEvaluating ? invoice.getProduct().getSeller() : invoice.getUser();
 
         // 5. Lưu đánh giá
-        FeedBack feedback = FeedBack.builder()
+        Feedback feedback = Feedback.builder()
                 .fromUser(currentUser)
                 .toUser(toUser)
                 .invoice(invoice)

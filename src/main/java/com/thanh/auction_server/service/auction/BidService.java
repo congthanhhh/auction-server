@@ -123,7 +123,6 @@ public class BidService {
         if (currentHighestBidder != null && currentHighestBidder.getId().equals(bidder.getId())) {
             if (newMaxBid.compareTo(currentHighestMaxBid) > 0) {
                 session.setHighestMaxBid(newMaxBid);
-                log.info("User {} (current winner) updated their max bid to {} VND for session {}", bidder.getUsername(), newMaxBid, auctionSessionId);
             } else {
                 throw new DataConflictException("Giá đặt mới phải cao hơn giá đặt tối đa hiện tại của bạn (" + currentHighestMaxBid + " VND)");
             }
