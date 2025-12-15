@@ -24,10 +24,5 @@ public class AuctionSessionResponse {
     SimpleProductResponse product;
     SimpleUserResponse highestBidder;
     boolean reservePriceMet;
-
-    // Không trả về highestMaxBid (bí mật)
-
-    // Tùy chọn: Thêm các thông tin khác như số lượng bid, số người tham gia...
-    // private int bidCount;
-    // private List<SimpleBidResponse> recentBids; // Ví dụ: 5 bid gần nhất
+    BigDecimal myMaxBid;
 }

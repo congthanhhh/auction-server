@@ -10,6 +10,7 @@ import com.thanh.auction_server.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Mapper(componentModel = "spring", uses = {UserMapper.class, ProductMapper.class})
 public interface AuctionSessionMapper {
@@ -29,19 +30,32 @@ public interface AuctionSessionMapper {
     @Mapping(source = "product", target = "product", qualifiedByName = "productToSimpleProductResponse") // Cần hàm map Product -> SimpleProductResponse
     @Mapping(source = "highestBidder", target = "highestBidder", qualifiedByName = "userToSimpleUserResponse") // Cần hàm map User -> SimpleUserResponse
     @Mapping(target = "reservePriceMet", expression = "java(calculateReserveMet(auctionSession))")
+    @Mapping(target = "myMaxBid", expression = "java(calculateMyMaxBid(auctionSession))")
     AuctionSessionResponse toAuctionSessionResponse(AuctionSession auctionSession);
 
 
     // Map để cập nhật (ít dùng cho session, chủ yếu là cập nhật status, price)
     // void updateAuctionSession(@MappingTarget AuctionSession session, AuctionSessionRequest request);
 
+    default java.math.BigDecimal calculateMyMaxBid(AuctionSession session) {
+        try {
+            String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+            // Nếu có người thắng VÀ người thắng là user hiện tại
+            if (session.getHighestBidder() != null &&
+                    session.getHighestBidder().getUsername().equals(currentUsername)) {
+                return session.getHighestMaxBid();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
+    }
 
     default boolean calculateReserveMet(AuctionSession session) {
         // Nếu không có giá sàn -> Mặc định là Đạt (hoặc tùy logic của bạn)
-        if (session.getReservePrice() == null) {
+        if (session.getReservePrice() == null || session.getReservePrice().compareTo(java.math.BigDecimal.ZERO) <= 0) {
             return true;
         }
-        // Nếu giá hiện tại >= giá sàn -> True
         return session.getCurrentPrice().compareTo(session.getReservePrice()) >= 0;
     }
 

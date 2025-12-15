@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: "${DB_URL}"
+    username: ${DB_USER}
+    password: "${DB_PASS}"
+  data:
+    redis:
+      host: ${RD_HOST}
+      port: ${RD_PORT}
+      username: default
+      password: "${RD_PASS}"
+      ssl:
+        enabled: true
