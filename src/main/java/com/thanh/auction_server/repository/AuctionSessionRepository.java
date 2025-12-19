@@ -26,4 +26,5 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
     // Optional<AuctionSession> findByProductId(Long productId);
 
     boolean existsByProduct_Id(Long productId);
+
 }

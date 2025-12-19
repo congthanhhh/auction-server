@@ -1,17 +1,20 @@
 package com.thanh.auction_server.service.auction;
 
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.constants.FeedbackRating;
 import com.thanh.auction_server.constants.InvoiceStatus;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.AuctionSession;
+import com.thanh.auction_server.entity.Feedback;
 import com.thanh.auction_server.entity.Invoice;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.mapper.InvoiceMapper;
+import com.thanh.auction_server.repository.FeedbackRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.UserRepository;
 import com.thanh.auction_server.service.authenticate.UserService;
@@ -37,6 +40,7 @@ import java.util.stream.Collectors;
 public class InvoiceService {
     InvoiceRepository invoiceRepository;
     UserRepository userRepository;
+    FeedbackRepository feedbackRepository;
     InvoiceMapper invoiceMapper;
     UserService userService;
     NotificationService notificationService;
@@ -123,22 +127,27 @@ public class InvoiceService {
         }
 
         // 5. THỰC THI HÀNH ĐỘNG
-
-        // 5a. Hủy hóa đơn
         invoice.setStatus(InvoiceStatus.CANCELLED_NON_PAYMENT);
         invoiceRepository.save(invoice);
-        log.info("Hóa đơn ID {} đã bị hủy do không thanh toán.", invoiceId);
+        userService.incrementStrikeCount(buyer.getId());
+        Feedback autoNegativeFeedback = Feedback.builder()
+                .fromUser(seller)
+                .toUser(buyer)
+                .invoice(invoice)
+                .rating(FeedbackRating.NEGATIVE)
+                .comment("HỆ THỐNG TỰ ĐỘNG: Người mua không thanh toán hóa đơn này.")
+                .createdAt(LocalDateTime.now())
+                .build();
+        feedbackRepository.save(autoNegativeFeedback);
+        // update điẻm uy tín
+        int currentScore = buyer.getReputationScore() == null ? 0 : buyer.getReputationScore();
+        buyer.setReputationScore(currentScore - 1);
+        userRepository.save(buyer);
 
-        // 5b. Tăng điểm phạt cho người mua
-        userService.incrementStrikeCount(buyer.getId()); // Gọi hàm đã tạo ở bước trước
-
-        // 5c. Gửi thông báo "bell icon" cho người mua
-        String message = String.format("Bạn đã nhận 1 điểm phạt vì không thanh toán hóa đơn cho sản phẩm '%s'.",
-                invoice.getProduct().getName());
-        notificationService.createNotification(buyer, message, "/my-profile/strikes"); // Link tới trang điểm phạt (ví dụ)
+        notificationService.createNotification(buyer, "Bạn bị trừ 1 điểm uy tín và nhận 1 gậy phạt do bùng hàng.", "/profile");
 
         return MessageResponse.builder()
-                .message("Báo cáo không thanh toán thành công. Người mua đã bị 1 điểm phạt.")
+                .message("Đã báo cáo bùng hàng. Người mua đã bị phạt điểm uy tín và nhận 1 gậy.")
                 .build();
     }
 

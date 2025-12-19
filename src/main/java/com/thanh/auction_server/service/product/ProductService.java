@@ -2,10 +2,12 @@ package com.thanh.auction_server.service.product;
 
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.dto.request.ProductRequest;
+import com.thanh.auction_server.dto.request.ProductSearchRequest;
 import com.thanh.auction_server.dto.request.ProductUpdateRequest;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.dto.response.ProductResponse;
 import com.thanh.auction_server.entity.Image;
+import com.thanh.auction_server.entity.Product;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UserNotFoundException;
 import com.thanh.auction_server.mapper.ProductMapper;
@@ -13,12 +15,15 @@ import com.thanh.auction_server.repository.CategoryRepository;
 import com.thanh.auction_server.repository.ImageRepository;
 import com.thanh.auction_server.repository.ProductRepository;
 import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.specification.ProductSpecification;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -199,5 +204,29 @@ public class ProductService {
         product.setIsActive(false);
         productRepository.save(product);
         log.info("Product with ID: {} has been deactivated", id);
+    }
+
+    public PageResponse<ProductResponse> searchProducts(ProductSearchRequest  request, int page, int size) {
+        // 1. Tạo Pageable (có thể thêm sort ở đây nếu muốn)
+        Pageable pageable = PageRequest.of(page - 1, size);
+
+        // 2. Lấy Specification từ Class util
+        Specification<Product> spec = ProductSpecification.getFilter(request);
+
+        // 3. Gọi Repository (Hàm findAll này có sẵn nhờ JpaSpecificationExecutor)
+        Page<Product> productPage = productRepository.findAll(spec, pageable);
+
+        // 4. Map sang Response
+        List<ProductResponse> responses = productPage.getContent().stream()
+                .map(productMapper::toProductResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.<ProductResponse>builder()
+                .currentPage(page)
+                .totalPages(productPage.getTotalPages())
+                .pageSize(productPage.getSize())
+                .totalElements(productPage.getTotalElements())
+                .data(responses)
+                .build();
     }
 }

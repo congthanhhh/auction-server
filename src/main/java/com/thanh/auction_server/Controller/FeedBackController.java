@@ -17,11 +17,17 @@ import org.springframework.web.bind.annotation.*;
 public class FeedBackController {
     FeedbackService feedbackService;
 
-    // Gửi đánh giá cho một hóa đơn
     @PostMapping("/invoice/{invoiceId}")
     public ResponseEntity<MessageResponse> createFeedback(
             @PathVariable Long invoiceId,
             @RequestBody @Valid FeedbackRequest request) {
         return ResponseEntity.ok(feedbackService.createFeedback(invoiceId, request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<String> updateFeedback(
+            @PathVariable Long id,
+            @RequestBody @Valid FeedbackRequest request) {
+        return ResponseEntity.ok(feedbackService.updateFeedback(id, request));
     }
 }

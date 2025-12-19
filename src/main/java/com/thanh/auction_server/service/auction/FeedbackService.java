@@ -69,7 +69,6 @@ public class FeedbackService {
         // 4. Xác định người nhận (Target User)
         User toUser = isBuyerEvaluating ? invoice.getProduct().getSeller() : invoice.getUser();
 
-        // 5. Lưu đánh giá
         Feedback feedback = Feedback.builder()
                 .fromUser(currentUser)
                 .toUser(toUser)
@@ -78,11 +77,42 @@ public class FeedbackService {
                 .comment(request.getComment())
                 .createdAt(LocalDateTime.now())
                 .build();
+        feedbackRepository.save(feedback);
+        int scoreChange = request.getRating().getValue();
+        int currentScore = toUser.getReputationScore() == null ? 0 : toUser.getReputationScore();
+        toUser.setReputationScore(currentScore + scoreChange);
+
+        userRepository.save(toUser);
+
+        return MessageResponse.builder()
+                .message("Đánh giá thành công! Điểm uy tín của đối phương đã thay đổi: " + (scoreChange > 0 ? "+" : "") + scoreChange)
+                .build();
+    }
+
+    @Transactional
+    public String updateFeedback(Long feedbackId, FeedbackRequest request) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        Feedback feedback = feedbackRepository.findById(feedbackId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + feedbackId));
+        if (!feedback.getFromUser().getUsername().equals(currentUsername)) {
+            throw new UnauthorizedException("Bạn không có quyền sửa đánh giá này.");
+        }
+        User targetUser = feedback.getToUser();
+        int oldRatingValue = feedback.getRating().getValue();
+        int newRatingValue = request.getRating().getValue();
+        if (oldRatingValue != newRatingValue) {
+            int currentScore = targetUser.getReputationScore() == null ? 0 : targetUser.getReputationScore();
+            int newScore = currentScore - oldRatingValue + newRatingValue;
+            targetUser.setReputationScore(newScore);
+            userRepository.save(targetUser);
+        }
+        feedback.setRating(request.getRating());
+        feedback.setComment(request.getComment());
+        feedback.setCreatedAt(LocalDateTime.now());
 
         feedbackRepository.save(feedback);
 
-        return MessageResponse.builder()
-                .message("Gửi đánh giá thành công!")
-                .build();
+        return "Cập nhật đánh giá thành công. Điểm uy tín đã được tính toán lại.";
+
     }
 }

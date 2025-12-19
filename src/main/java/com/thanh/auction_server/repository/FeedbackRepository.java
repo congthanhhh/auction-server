@@ -12,11 +12,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
 
     // Kiểm tra xem (fromUser) đã đánh giá cho hóa đơn (invoice) này chưa
     boolean existsByInvoice_IdAndFromUser_Id(Long invoiceId, String fromUserId);
-
-    // Tính điểm trung bình (Uy tín) của một user
-    @Query("SELECT AVG(f.rating) FROM Feedback f WHERE f.toUser.id = :userId")
-    Double getAverageRating(String userId);
-
     // Đếm số lượng đánh giá
     long countByToUser_Id(String userId);
 }

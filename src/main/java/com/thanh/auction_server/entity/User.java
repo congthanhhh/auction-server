@@ -33,6 +33,10 @@ public class User {
     @Column(columnDefinition = "INT DEFAULT 0")
     Integer strikeCount = 0;
 
+    @Builder.Default
+    @Column(columnDefinition = "INT DEFAULT 0")
+    Integer reputationScore = 0;
+
     @ManyToMany
     Set<Role> roles;
 }

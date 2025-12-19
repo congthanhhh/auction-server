@@ -1,6 +1,7 @@
 package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.dto.request.ProductRequest;
+import com.thanh.auction_server.dto.request.ProductSearchRequest;
 import com.thanh.auction_server.dto.request.ProductUpdateRequest;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.dto.response.ProductResponse;
@@ -40,6 +41,15 @@ public class ProductController {
     public ResponseEntity<ProductResponse> updateProduct(@PathVariable Long id, @RequestBody ProductUpdateRequest request) {
         ProductResponse updatedProduct = productService.updateProduct(id, request);
         return ResponseEntity.ok(updatedProduct);
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<PageResponse<ProductResponse>> searchProducts(
+            @ModelAttribute ProductSearchRequest request, // Tự động map query params vào DTO
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(productService.searchProducts(request, page, size));
     }
 
     @DeleteMapping("/{id}")

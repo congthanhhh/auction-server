@@ -1,5 +1,6 @@
 package com.thanh.auction_server.dto.request;
 
+import com.thanh.auction_server.constants.FeedbackRating;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -12,9 +13,9 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class FeedbackRequest {
-    @NotNull(message = "Bạn chưa chấm điểm sao")
-    @Min(value = 1, message = "Tối thiểu 1 sao")
-    @Max(value = 5, message = "Tối đa 5 sao")
-    Integer rating;
+
+    @NotNull(message = "Vui lòng chọn đánh giá: POSITIVE, NEUTRAL hoặc NEGATIVE")
+    FeedbackRating rating;
+
     String comment;
 }
