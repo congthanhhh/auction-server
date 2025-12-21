@@ -3,6 +3,7 @@ package com.thanh.auction_server.Controller;
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
+import com.thanh.auction_server.dto.response.UserProfileResponse;
 import com.thanh.auction_server.dto.response.UserResponse;
 import com.thanh.auction_server.service.authenticate.UserService;
 import lombok.AccessLevel;
@@ -79,6 +80,11 @@ public class UserController {
     @PostMapping("/reset-password")
     public ResponseEntity<MessageResponse> resetPassword(@RequestBody @Validated ResetPassRequest request) {
         return ResponseEntity.ok(userService.resetPassword(request));
+    }
+
+    @GetMapping("/{id}/profile")
+    public ResponseEntity<UserProfileResponse> getPublicProfile(@PathVariable String id) {
+        return ResponseEntity.ok(userService.getPublicProfile(id));
     }
 
 }

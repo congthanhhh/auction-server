@@ -19,6 +19,7 @@ public class ErrorMessage {
     public static final String AUCTION_SESSION_ALREADY_EXISTS_FOR_PRODUCT = "An auction session already exists for this product.";
     public static final String AUCTION_SESSION_NOT_FOUND = "Auction session not found.";
     public static final String INVOICE_NOT_FOUND = "Invoice not found.";
+    public static final String STATUS_INCORRECT = "Status is incorrect.";
 
 
 }

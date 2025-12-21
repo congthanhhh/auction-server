@@ -2,19 +2,17 @@ package com.thanh.auction_server.service.authenticate;
 
 import com.thanh.auction_server.constants.RoleEnum;
 import com.thanh.auction_server.dto.request.*;
-import com.thanh.auction_server.dto.response.MessageResponse;
-import com.thanh.auction_server.dto.response.PageResponse;
-import com.thanh.auction_server.dto.response.UserResponse;
+import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.exception.UserAlreadyExistsException;
 import com.thanh.auction_server.exception.UserNotFoundException;
+import com.thanh.auction_server.mapper.ProductMapper;
 import com.thanh.auction_server.mapper.UserMapper;
-import com.thanh.auction_server.repository.RefreshTokenRepository;
-import com.thanh.auction_server.repository.RoleRepository;
-import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.repository.*;
 import com.thanh.auction_server.service.utils.EmailService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +31,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -46,6 +45,9 @@ public class UserService {
     RefreshTokenRepository refreshTokenRepository;
     OtpService otpService;
     EmailService emailService;
+    FeedbackRepository feedbackRepository;
+    ProductMapper productMapper;
+    ProductRepository productRepository;
 
     public UserResponse createUser(UserCreationRequest request) {
         if (userRepository.existsByUsername(request.getUsername()))
@@ -236,6 +238,46 @@ public class UserService {
         // notificationService.createNotification(user, "Bạn đã nhận 1 điểm phạt do không thanh toán.", "/my-strikes");
     }
 
+    public UserProfileResponse getPublicProfile(String userId) {
+        // 1. Lấy thông tin User
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        // 2. Lấy danh sách Feedback gần nhất (Lấy 5 cái đầu tiên)
+        List<FeedbackDto> recentFeedbacks = feedbackRepository.findByToUser_IdOrderByCreatedAtDesc(userId, PageRequest.of(0, 5))
+                .getContent()
+                .stream()
+                .map(fb -> FeedbackDto.builder()
+                        .id(fb.getId())
+                        .fromUsername(fb.getFromUser().getUsername()) // Ẩn danh tính chi tiết, chỉ hiện username
+                        .rating(fb.getRating())
+                        .comment(fb.getComment())
+                        .createdAt(fb.getCreatedAt())
+                        .productName(fb.getInvoice().getProduct().getName())
+                        .build())
+                .collect(Collectors.toList());
+
+        // 3. Đếm tổng feedback
+        long totalFeedbacks = feedbackRepository.countByToUser_Id(userId);
+
+        // 4. Lấy danh sách sản phẩm đang bán
+        List<ProductResponse> products = productRepository.findBySeller_Id(userId)
+                .stream()
+                .map(productMapper::toProductResponse) // Dùng Mapper có sẵn
+                .limit(10) // Chỉ lấy 10 sản phẩm tượng trưng (hoặc phân trang nếu muốn)
+                .collect(Collectors.toList());
+
+        // 5. Build Response
+        return UserProfileResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .reputationScore(user.getReputationScore() == null ? 0 : user.getReputationScore()) // Lấy điểm uy tín
+                .totalFeedbacks((int) totalFeedbacks)
+                .recentFeedbacks(recentFeedbacks)
+                .products(products)
+                .build();
+    }
 
 }

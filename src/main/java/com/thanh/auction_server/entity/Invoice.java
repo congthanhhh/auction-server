@@ -40,6 +40,15 @@ public class Invoice {
     @Column(nullable = false)
     InvoiceStatus status;
 
+    @Column(name = "tracking_code")
+    String trackingCode; // Mã vận đơn
+
+    @Column(name = "carrier")
+    String carrier;      // Đơn vị vận chuyển (Ví dụ: GHTK, Viettel Post)
+
+    @Column(name = "shipped_at")
+    LocalDateTime shippedAt;
+
     @Column(nullable = false)
     LocalDateTime createdAt;
 

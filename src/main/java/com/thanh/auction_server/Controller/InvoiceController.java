@@ -47,4 +47,23 @@ public class InvoiceController {
         MessageResponse response = invoiceService.reportNonPayment(id);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{id}/ship")
+    public ResponseEntity<MessageResponse> shipInvoice(
+            @PathVariable Long id,
+            @RequestBody @Validated ShipInvoiceRequest request) {
+        return ResponseEntity.ok(invoiceService.shipInvoice(id, request));
+    }
+
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<MessageResponse> confirmInvoice(@PathVariable Long id) {
+        return ResponseEntity.ok(invoiceService.confirmInvoice(id));
+    }
+
+    @PostMapping("/{id}/dispute")
+    public ResponseEntity<MessageResponse> reportDispute(
+            @PathVariable Long id,
+            @RequestBody @Validated DisputeRequest request) {
+        return ResponseEntity.ok(invoiceService.reportDispute(id, request));
+    }
 }

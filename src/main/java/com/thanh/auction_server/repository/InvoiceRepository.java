@@ -15,5 +15,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByStatusAndDueDateBefore(InvoiceStatus status, LocalDateTime now);
 
     // Lấy hóa đơn của tôi
-     Page<Invoice> findByUser_IdOrderByCreatedAtDesc(String userId, Pageable pageable);
+    Page<Invoice> findByUser_IdOrderByCreatedAtDesc(String userId, Pageable pageable);
+
+    List<Invoice> findByStatusAndShippedAtBefore(InvoiceStatus status, LocalDateTime date);
 }

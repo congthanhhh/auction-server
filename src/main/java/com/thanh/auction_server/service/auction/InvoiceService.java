@@ -3,17 +3,17 @@ package com.thanh.auction_server.service.auction;
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.constants.FeedbackRating;
 import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.dto.request.DisputeRequest;
+import com.thanh.auction_server.dto.request.ShipInvoiceRequest;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
-import com.thanh.auction_server.entity.AuctionSession;
-import com.thanh.auction_server.entity.Feedback;
-import com.thanh.auction_server.entity.Invoice;
-import com.thanh.auction_server.entity.User;
+import com.thanh.auction_server.entity.*;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.mapper.InvoiceMapper;
+import com.thanh.auction_server.repository.DisputeRepository;
 import com.thanh.auction_server.repository.FeedbackRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.UserRepository;
@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 @Service
 public class InvoiceService {
     InvoiceRepository invoiceRepository;
+    DisputeRepository disputeRepository;
     UserRepository userRepository;
     FeedbackRepository feedbackRepository;
     InvoiceMapper invoiceMapper;
@@ -149,6 +150,122 @@ public class InvoiceService {
         return MessageResponse.builder()
                 .message("Đã báo cáo bùng hàng. Người mua đã bị phạt điểm uy tín và nhận 1 gậy.")
                 .build();
+    }
+
+    @Transactional
+    public MessageResponse shipInvoice(Long invoiceId, ShipInvoiceRequest request) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
+        User seller = invoice.getProduct().getSeller();
+        if (!seller.getUsername().equals(currentUsername)) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
+        }
+        if (invoice.getStatus() != InvoiceStatus.PAID) {
+            throw new DataConflictException(ErrorMessage.STATUS_INCORRECT + invoice.getStatus());
+        }
+        invoice.setTrackingCode(request.getTrackingCode());
+        invoice.setCarrier(request.getCarrier());
+        invoice.setShippedAt(LocalDateTime.now());
+        invoice.setStatus(InvoiceStatus.SHIPPING);
+        invoiceRepository.save(invoice);
+
+        User buyer = invoice.getUser();
+        String message = "Đơn hàng '" + invoice.getProduct().getName() + "' đã được gửi đi. Mã vận đơn: " + request.getTrackingCode();
+        String link = "/invoices/" + invoice.getId(); // Link đến chi tiết đơn hàng
+        notificationService.createNotification(buyer, message, link);
+
+        return MessageResponse.builder()
+                .message("Cập nhật vận đơn thành công. Đơn hàng đang trên đường giao.")
+                .build();
+    }
+
+    @Transactional
+    public MessageResponse confirmInvoice(Long invoiceId) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
+        User buyer = invoice.getUser();
+        if (!buyer.getUsername().equals(currentUsername)) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
+        }
+        if (invoice.getStatus() != InvoiceStatus.SHIPPING) {
+            throw new DataConflictException(ErrorMessage.STATUS_INCORRECT + invoice.getStatus());
+        }
+        invoice.setStatus(InvoiceStatus.COMPLETED);
+        invoiceRepository.save(invoice);
+
+        User seller = invoice.getProduct().getSeller();
+        String sellerMsg = "Người mua " + buyer.getUsername() + " đã xác nhận nhận đơn hàng '" + invoice.getProduct().getName() + "'. Giao dịch hoàn tất.";
+        notificationService.createNotification(seller, sellerMsg, "/invoices/" + invoice.getId());
+
+        String buyerMsg = "Cảm ơn bạn đã mua hàng! Hãy dành chút thời gian đánh giá người bán.";
+        notificationService.createNotification(buyer, buyerMsg, "/invoices/" + invoice.getId());
+
+        return MessageResponse.builder()
+                .message("Xác nhận nhận hàng thành công. Giao dịch đã hoàn tất.")
+                .build();
+    }
+
+    @Transactional
+    public MessageResponse reportDispute(Long invoiceId, DisputeRequest request) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
+        User buyer = invoice.getUser();
+        if (!buyer.getUsername().equals(currentUsername)) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
+        }
+        if (invoice.getStatus() != InvoiceStatus.SHIPPING) {
+            throw new DataConflictException(ErrorMessage.STATUS_INCORRECT + invoice.getStatus());
+        }
+        invoice.setStatus(InvoiceStatus.DISPUTE);
+        invoiceRepository.save(invoice);
+
+        Dispute dispute = Dispute.builder()
+                .invoice(invoice)
+                .reason(request.getReason())
+                .createdAt(LocalDateTime.now())
+                .build();
+        disputeRepository.save(dispute);
+
+        User seller = invoice.getProduct().getSeller();
+        // A. Báo cho Seller
+        String sellerMsg = "Người mua ĐANG KHIẾU NẠI đơn hàng '" + invoice.getProduct().getName() + "'. Lý do: " + request.getReason();
+        notificationService.createNotification(seller, sellerMsg, "/invoices/" + invoice.getId());
+        // B. Báo cho Buyer xác nhận
+        String buyerMsg = "Khiếu nại của bạn đã được ghi nhận. Hệ thống đã tạm dừng quy trình hoàn thành đơn hàng.";
+        notificationService.createNotification(buyer, buyerMsg, "/invoices/" + invoice.getId());
+
+        return MessageResponse.builder()
+                .message("Đã gửi khiếu nại thành công. Admin và Người bán sẽ sớm liên hệ giải quyết.")
+                .build();
+    }
+
+    @Transactional
+    public void autoFinishInvoices() {
+        //Tự động hoàn thành sau 15 ngày
+        LocalDateTime thresholdTime = LocalDateTime.now().minusDays(15);
+        // Tìm các đơn SHIPPING đã quá hạn
+        List<Invoice> invoices = invoiceRepository.findByStatusAndShippedAtBefore(InvoiceStatus.SHIPPING, thresholdTime);
+        if (invoices.isEmpty()) {
+            return;
+        }
+        log.info("Tìm thấy {} đơn hàng SHIPPING quá 15 ngày. Đang tự động hoàn thành...", invoices.size());
+        for (Invoice invoice : invoices) {
+            invoice.setStatus(InvoiceStatus.COMPLETED);
+//            notificationService.createNotification(
+//                    invoice.getUser(),
+//                    "Đơn hàng '" + invoice.getProduct().getName() + "' đã được hệ thống tự động xác nhận hoàn thành.",
+//                    "/invoices/" + invoice.getId()
+//            );
+            notificationService.createNotification(
+                    invoice.getProduct().getSeller(),
+                    "Đơn hàng '" + invoice.getProduct().getName() + "' đã tự động hoàn tất sau 15 ngày.",
+                    "/invoices/" + invoice.getId()
+            );
+        }
+        invoiceRepository.saveAll(invoices);
     }
 
     @Transactional
