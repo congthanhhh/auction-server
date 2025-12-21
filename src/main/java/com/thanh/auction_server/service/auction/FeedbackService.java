@@ -1,5 +1,7 @@
 package com.thanh.auction_server.service.auction;
 
+import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.constants.FeedbackRating;
 import com.thanh.auction_server.constants.InvoiceStatus;
 import com.thanh.auction_server.dto.request.FeedbackRequest;
 import com.thanh.auction_server.dto.response.MessageResponse;
@@ -9,6 +11,7 @@ import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
+import com.thanh.auction_server.exception.UserNotFoundException;
 import com.thanh.auction_server.repository.FeedbackRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.UserRepository;
@@ -35,40 +38,36 @@ public class FeedbackService {
     public MessageResponse createFeedback(Long invoiceId, FeedbackRequest request) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         User currentUser = userRepository.findByUsername(currentUsername)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + currentUsername));
 
         Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + invoiceId));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
 
         boolean isBuyerEvaluating = currentUser.getId().equals(invoice.getUser().getId());
         boolean isSellerEvaluating = currentUser.getId().equals(invoice.getProduct().getSeller().getId());
 
         if (!isBuyerEvaluating && !isSellerEvaluating) {
-            throw new UnauthorizedException("Bạn không tham gia vào giao dịch này nên không có quyền đánh giá.");
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED_ACCESS);
         }
-
-        // 2. CHECK QUYỀN ĐÁNH GIÁ DỰA TRÊN TRẠNG THÁI HÓA ĐƠN
-        if (invoice.getStatus() == InvoiceStatus.PAID) {
-            // Cho phép cả 2 bên đánh giá
+        if (invoice.getStatus() == InvoiceStatus.COMPLETED) {
+            if (isSellerEvaluating && request.getRating() == FeedbackRating.NEGATIVE) {
+                throw new DataConflictException(ErrorMessage.CANNOT_GIVE_FEEDBACK);
+            }
         }
         else if (invoice.getStatus() == InvoiceStatus.CANCELLED_NON_PAYMENT) {
             if (isBuyerEvaluating) {
-                throw new DataConflictException("Bạn không thể đánh giá vì bạn đã không thanh toán hóa đơn này (Bùng hàng).");
+                throw new DataConflictException(ErrorMessage.CANNOT_GIVE_FEEDBACK);
             }
         }
-        // Các trường hợp khác (PENDING, CANCELLED_BY_SELLER...)
         else {
-            throw new DataConflictException("Giao dịch chưa hoàn tất hoặc đã bị hủy, chưa thể đánh giá.");
+            throw new DataConflictException(ErrorMessage.CANNOT_GIVE_FEEDBACK + ErrorMessage.STATUS_INCORRECT);
         }
-
-        // 3. Kiểm tra xem đã đánh giá chưa (Tránh spam)
         if (feedbackRepository.existsByInvoice_IdAndFromUser_Id(invoiceId, currentUser.getId())) {
-            throw new DataConflictException("Bạn đã gửi đánh giá cho giao dịch này rồi.");
+            throw new DataConflictException(ErrorMessage.FEEDBACK_ALREADY_EXISTS);
         }
 
-        // 4. Xác định người nhận (Target User)
+        // Xác định người nhận (Target User)
         User toUser = isBuyerEvaluating ? invoice.getProduct().getSeller() : invoice.getUser();
-
         Feedback feedback = Feedback.builder()
                 .fromUser(currentUser)
                 .toUser(toUser)
@@ -81,11 +80,9 @@ public class FeedbackService {
         int scoreChange = request.getRating().getValue();
         int currentScore = toUser.getReputationScore() == null ? 0 : toUser.getReputationScore();
         toUser.setReputationScore(currentScore + scoreChange);
-
         userRepository.save(toUser);
-
         return MessageResponse.builder()
-                .message("Đánh giá thành công! Điểm uy tín của đối phương đã thay đổi: " + (scoreChange > 0 ? "+" : "") + scoreChange)
+                .message("Update reputation" + (scoreChange > 0 ? "+" : "") + scoreChange)
                 .build();
     }
 
@@ -93,9 +90,9 @@ public class FeedbackService {
     public String updateFeedback(Long feedbackId, FeedbackRequest request) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         Feedback feedback = feedbackRepository.findById(feedbackId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + feedbackId));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.FEEDBACK_NOT_FOUND + feedbackId));
         if (!feedback.getFromUser().getUsername().equals(currentUsername)) {
-            throw new UnauthorizedException("Bạn không có quyền sửa đánh giá này.");
+            throw new UnauthorizedException(ErrorMessage.CANNOT_GIVE_FEEDBACK);
         }
         User targetUser = feedback.getToUser();
         int oldRatingValue = feedback.getRating().getValue();
@@ -109,10 +106,9 @@ public class FeedbackService {
         feedback.setRating(request.getRating());
         feedback.setComment(request.getComment());
         feedback.setCreatedAt(LocalDateTime.now());
-
         feedbackRepository.save(feedback);
 
-        return "Cập nhật đánh giá thành công. Điểm uy tín đã được tính toán lại.";
+        return "Feedback updated successfully.";
 
     }
 }

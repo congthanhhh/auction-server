@@ -20,6 +20,8 @@ public class ErrorMessage {
     public static final String AUCTION_SESSION_NOT_FOUND = "Auction session not found.";
     public static final String INVOICE_NOT_FOUND = "Invoice not found.";
     public static final String STATUS_INCORRECT = "Status is incorrect.";
-
-
+    public static final String UNAUTHORIZED_ACCESS = "You are not authorized to perform this action.";
+    public static final String CANNOT_GIVE_FEEDBACK = "You cannot give feedback.";
+    public static final String FEEDBACK_ALREADY_EXISTS = "Feedback already exists for this invoice.";
+    public static final String FEEDBACK_NOT_FOUND = "Feedback not found.";
 }
