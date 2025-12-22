@@ -1,4 +1,4 @@
-package com.thanh.auction_server.service.auction;
+package com.thanh.auction_server.service.invoice;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -12,6 +12,7 @@ import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.mapper.AuctionSessionMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
 import com.thanh.auction_server.repository.ProductRepository;
+import com.thanh.auction_server.service.invoice.InvoiceService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

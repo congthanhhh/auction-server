@@ -40,6 +40,10 @@ public class Invoice {
     @Column(nullable = false)
     InvoiceStatus status;
 
+    String shippingAddress;
+    String recipientName;
+    String recipientPhone;
+
     @Column(name = "tracking_code")
     String trackingCode; // Mã vận đơn
 

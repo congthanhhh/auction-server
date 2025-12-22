@@ -127,8 +127,6 @@ public class BidService {
         User previousHighestBidder = currentHighestBidder;
         boolean isNewHighestBidder = false;
         Bid savedBid = null;
-
-//        boolean reserveMetTrigger = false;
         // 1. NGƯỜI ĐANG DẪN ĐẦU TỰ ĐẶT LẠI (UPDATE MAX BID)
         if (currentHighestBidder != null && currentHighestBidder.getId().equals(bidder.getId())) {
             if (newMaxBid.compareTo(currentHighestMaxBid) <= 0) {
@@ -140,7 +138,6 @@ public class BidService {
                 // Nếu giá hiện tại đang thấp hơn sàn -> Đẩy lên bằng sàn ngay
                 if (session.getCurrentPrice().compareTo(reservePrice) < 0) {
                     session.setCurrentPrice(reservePrice);
-//                    reserveMetTrigger = true;
                     reserveMetNow = true;
                 }
             }
