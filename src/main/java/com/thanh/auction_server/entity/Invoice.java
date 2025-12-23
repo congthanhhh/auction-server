@@ -1,6 +1,7 @@
 package com.thanh.auction_server.entity;
 
 import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.constants.InvoiceType;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -58,4 +59,7 @@ public class Invoice {
 
     @Column(nullable = false)
     LocalDateTime dueDate;
+
+    @Enumerated(EnumType.STRING)
+    InvoiceType type;
 }

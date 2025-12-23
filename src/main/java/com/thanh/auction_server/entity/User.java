@@ -25,6 +25,8 @@ public class User {
     String password;
     @Column(name = "email", unique = true, nullable = false)
     String email;
+    @Column(name = "phone_number", unique = true)
+    String phoneNumber;
     Boolean isActive = false;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

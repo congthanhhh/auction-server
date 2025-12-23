@@ -17,6 +17,7 @@ public class UserUpdateRequest {
     String lastName;
     String password;
     String email;
+    String phoneNumber;
     LocalDateTime updateAt = LocalDateTime.now();
     List<String> roles;
 }

@@ -5,6 +5,7 @@ public class ErrorMessage {
     public static final String BLANK_USER_PASS = "Please enter username and password.";
     public static final String USER_ALREADY_EXIST = "User already exists.";
     public static final String EMAIL_ALREADY_EXIST = "Email already exists.";
+    public static final String PHONE_ALREADY_EXIST = "Phone number already exists.";
     public static final String PASSWORD_ALREADY_EXIST = "Password already created.";
     public static final String INVALID_CREDENTIALS = "Invalid credentials.";
     public static final String INVALID_REFRESH_TOKEN = "Invalid refresh token.";
@@ -24,4 +25,5 @@ public class ErrorMessage {
     public static final String CANNOT_GIVE_FEEDBACK = "You cannot give feedback.";
     public static final String FEEDBACK_ALREADY_EXISTS = "Feedback already exists for this invoice.";
     public static final String FEEDBACK_NOT_FOUND = "Feedback not found.";
+    public static final String ADDRESS_NOT_FOUND = "Address not found.";
 }

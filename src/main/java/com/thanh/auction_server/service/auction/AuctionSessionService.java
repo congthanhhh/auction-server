@@ -2,17 +2,24 @@ package com.thanh.auction_server.service.auction;
 
 import com.thanh.auction_server.constants.AuctionStatus;
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.constants.InvoiceType;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
 import com.thanh.auction_server.dto.response.AuctionSessionResponse;
+import com.thanh.auction_server.dto.response.CreateAuctionSessionResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.AuctionSession;
+import com.thanh.auction_server.entity.Invoice;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.mapper.AuctionSessionMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
+import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.ProductRepository;
 import com.thanh.auction_server.service.invoice.InvoiceService;
+import com.thanh.auction_server.service.payment.PaymentService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -36,45 +43,82 @@ public class AuctionSessionService {
     AuctionSessionRepository auctionSessionRepository;
     ProductRepository productRepository;
     AuctionSessionMapper auctionSessionMapper;
+    InvoiceRepository invoiceRepository;
     NotificationService notificationService;
     InvoiceService invoiceService;
+    PaymentService paymentService;
 
     @Transactional
-    public AuctionSessionResponse createAuctionSession(AuctionSessionRequest request) {
+    public CreateAuctionSessionResponse createAuctionSession(AuctionSessionRequest request, HttpServletRequest httpRequest) {
         var product = productRepository.findByIdAndIsActiveTrue(request.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND));
         if (auctionSessionRepository.existsByProduct_Id(request.getProductId())) {
             throw new DataConflictException(ErrorMessage.AUCTION_SESSION_ALREADY_EXISTS_FOR_PRODUCT);
         }
-
-        if(request.getEndTime().isBefore(request.getStartTime())||request.getEndTime().isEqual(request.getStartTime())){
+        if (request.getEndTime().isBefore(request.getStartTime()) || request.getEndTime().isEqual(request.getStartTime())) {
             throw new DataConflictException("End time must be after start time.");
         }
         if (request.getStartTime().isBefore(LocalDateTime.now())) {
             throw new DataConflictException("Start time must be in the future.");
         }
-        if(request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(product.getStartPrice())<=0){
+        if (request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(product.getStartPrice()) <= 0) {
             throw new DataConflictException("Buy now price must be greater than starting price.");
         }
-//        if(request.getReservePrice() != null && request.getReservePrice().compareTo(product.getStartPrice())<=0){
-//            throw new DataConflictException("Reserve price must be greater than or equal to starting price.");
-//        }
-        if(request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(request.getReservePrice())<=0){
+        if (request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(request.getReservePrice()) <= 0) {
             throw new DataConflictException("Buy now price must be greater than or equal to reserve price.");
         }
+        AuctionSession auctionSession = auctionSessionMapper.toAuctionSession(request);
+        auctionSession.setProduct(product);
+        auctionSession.setStartPrice(product.getStartPrice());
+        auctionSession.setCurrentPrice(product.getStartPrice());
+        auctionSession.setStatus(AuctionStatus.SCHEDULED);
+        auctionSession.setCreatedAt(LocalDateTime.now());
 
-        var session = auctionSessionMapper.toAuctionSession(request);
-        session.setProduct(product);
-        session.setStartPrice(product.getStartPrice());
-        session.setCurrentPrice(product.getStartPrice());
-        session.setStatus(AuctionStatus.SCHEDULED);
-        session.setCreatedAt(LocalDateTime.now());
+        auctionSession.setReservePrice(request.getReservePrice());
+        BigDecimal reservePrice = request.getReservePrice() == null ? BigDecimal.ZERO : request.getReservePrice();
+        // TÍNH PHÍ GIA SAN & TRẢ LINK THANH TOÁN
+        if (reservePrice.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal feeAmount = reservePrice.multiply(BigDecimal.valueOf(0.05));
+            //Lưu Session (Status: WAITING_PAYMENT)
+            auctionSession.setStatus(AuctionStatus.WAITING_PAYMENT);
+            auctionSessionRepository.save(auctionSession);
+            Invoice feeInvoice = Invoice.builder()
+                    .user(product.getSeller())
+                    .auctionSession(auctionSession)
+                    .product(product)
+                    .finalPrice(feeAmount)
+                    .type(InvoiceType.LISTING_FEE)
+                    .status(InvoiceStatus.PENDING)
+                    .createdAt(LocalDateTime.now())
+                    .dueDate(LocalDateTime.now().plusMinutes(15))
+                    .shippingAddress("Phí dịch giá sàn 5%")
+                    .recipientName(product.getSeller().getUsername())
+                    .recipientPhone(product.getSeller().getPhoneNumber())
+                    .build();
+            invoiceRepository.save(feeInvoice);
 
-        AuctionSession savedSession = auctionSessionRepository.save(session);
-        return auctionSessionMapper.toAuctionSessionResponse(savedSession);
+            String paymentUrl = paymentService.createVnPayPayment(httpRequest, feeInvoice.getId(), null);
+            //Trả về Link để Frontend redirect
+            return CreateAuctionSessionResponse.builder()
+                    .message("Vui lòng thanh toán phí gía sàn: " + feeAmount + "VND")
+                    .paymentUrl(paymentUrl)
+                    .build();
+        } else {
+            // No reserve price
+            if (request.getStartTime().isAfter(LocalDateTime.now())) {
+                auctionSession.setStatus(AuctionStatus.SCHEDULED);
+            } else {
+                auctionSession.setStatus(AuctionStatus.ACTIVE);
+            }
+            auctionSessionRepository.save(auctionSession);
+            return CreateAuctionSessionResponse.builder()
+                    .message("Create auction session successfully.")
+                    .sessionDetails(auctionSessionMapper.toAuctionSessionResponse(auctionSession))
+                    .build();
+        }
     }
 
-    public PageResponse<AuctionSessionResponse> getAllAuctionSessions(AuctionStatus status,int page, int size) {
+    public PageResponse<AuctionSessionResponse> getAllAuctionSessions(AuctionStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
         Specification<AuctionSession> spec = (root, query, cb) -> {
             if (status != null) {

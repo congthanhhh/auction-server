@@ -6,10 +6,7 @@ import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.constants.ErrorMessage;
-import com.thanh.auction_server.exception.ResourceNotFoundException;
-import com.thanh.auction_server.exception.UnauthorizedException;
-import com.thanh.auction_server.exception.UserAlreadyExistsException;
-import com.thanh.auction_server.exception.UserNotFoundException;
+import com.thanh.auction_server.exception.*;
 import com.thanh.auction_server.mapper.ProductMapper;
 import com.thanh.auction_server.mapper.UserMapper;
 import com.thanh.auction_server.repository.*;
@@ -52,6 +49,9 @@ public class UserService {
     public UserResponse createUser(UserCreationRequest request) {
         if (userRepository.existsByUsername(request.getUsername()))
             throw new UserAlreadyExistsException(ErrorMessage.USER_ALREADY_EXIST);
+        if (request.getPhoneNumber() != null && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new DataConflictException(ErrorMessage.PHONE_ALREADY_EXIST);
+        }
 
         User user = userMapper.toUser(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -67,6 +67,9 @@ public class UserService {
 
     @Transactional
     public MessageResponse createUserOtp(UserCreationRequest request) {
+        if (request.getPhoneNumber() != null && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new DataConflictException(ErrorMessage.PHONE_ALREADY_EXIST);
+        }
         var existingUserOpt = userRepository.findByEmail(request.getEmail());
         if (existingUserOpt.isPresent()) {
             User existingUser = existingUserOpt.get();

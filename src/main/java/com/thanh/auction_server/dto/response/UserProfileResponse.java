@@ -13,6 +13,8 @@ public class UserProfileResponse {
     String username;
     String firstName;
     String lastName;
+    String email;
+    String phoneNumber;
 
     Integer reputationScore; // Điểm uy tín (+15, -2...)
     Integer totalFeedbacks;  // Tổng số lượt đánh giá

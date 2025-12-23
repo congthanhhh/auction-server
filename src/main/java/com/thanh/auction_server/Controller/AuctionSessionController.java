@@ -3,8 +3,10 @@ package com.thanh.auction_server.Controller;
 import com.thanh.auction_server.constants.AuctionStatus;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
 import com.thanh.auction_server.dto.response.AuctionSessionResponse;
+import com.thanh.auction_server.dto.response.CreateAuctionSessionResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.service.auction.AuctionSessionService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -20,10 +22,9 @@ public class AuctionSessionController {
     AuctionSessionService auctionSessionService;
 
     @PostMapping
-    public ResponseEntity<AuctionSessionResponse> createAuctionSession(
-            @RequestBody @Valid AuctionSessionRequest request) {
-        AuctionSessionResponse response = auctionSessionService.createAuctionSession(request);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<CreateAuctionSessionResponse> createAuctionSession(
+            @RequestBody @Valid AuctionSessionRequest request, HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(auctionSessionService.createAuctionSession(request, httpRequest));
     }
 
     @GetMapping

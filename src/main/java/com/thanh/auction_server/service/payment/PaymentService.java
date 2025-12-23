@@ -2,8 +2,10 @@ package com.thanh.auction_server.service.payment;
 
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.constants.InvoiceType;
 import com.thanh.auction_server.entity.Address;
 import com.thanh.auction_server.entity.Invoice;
+import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.repository.AddressRepository;
@@ -35,7 +37,6 @@ public class PaymentService {
     @Transactional
     public String createVnPayPayment(HttpServletRequest request, Long invoiceId, Long addressId) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND));
         if (!invoice.getUser().getUsername().equals(currentUsername)) {
@@ -44,13 +45,21 @@ public class PaymentService {
         if (invoice.getStatus() != InvoiceStatus.PENDING) {
             throw new RuntimeException(ErrorMessage.STATUS_INCORRECT);
         }
-        // Snapshot Địa chỉ (Lưu cứng vào hóa đơn)
-        Address address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
-        invoice.setShippingAddress(address.getStreet() + ", " + address.getWard() + ", " + address.getDistrict() + ", " + address.getCity());
-        invoice.setRecipientName(address.getRecipientName());
-        invoice.setRecipientPhone(address.getPhoneNumber());
-        invoiceRepository.save(invoice);
+        if (invoice.getType() == InvoiceType.AUCTION_SALE) {
+            if (addressId == null) {
+                throw new DataConflictException(ErrorMessage.ADDRESS_NOT_FOUND + "required for invoice");
+            }
+            // Snapshot Địa chỉ (Lưu cứng vào hóa đơn)
+            Address address = addressRepository.findById(addressId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.ADDRESS_NOT_FOUND));
+            invoice.setShippingAddress(address.getStreet() + ", " + address.getWard() + ", " + address.getDistrict() + ", " + address.getCity());
+            invoice.setRecipientName(address.getRecipientName());
+            invoice.setRecipientPhone(address.getPhoneNumber());
+            invoiceRepository.save(invoice);
+        } else if(invoice.getType() == InvoiceType.LISTING_FEE) {
+            // Không cần địa chỉ with reservePrice
+            invoice.setShippingAddress("reservePrice payment");
+        }
 
         // Build tham số gửi sang VNPay
         long amount = (long) (invoice.getFinalPrice().doubleValue() * 100); // VNPay yêu cầu nhân 100 (VND)

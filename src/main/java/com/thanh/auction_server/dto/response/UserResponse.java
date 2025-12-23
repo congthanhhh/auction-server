@@ -18,6 +18,7 @@ public class UserResponse {
     String lastName;
     boolean noPassword;
     String email;
+    String phoneNumber;
     Boolean isActive = true;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
