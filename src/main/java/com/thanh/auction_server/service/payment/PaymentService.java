@@ -181,7 +181,6 @@ public class PaymentService {
                                 // Nếu đã đến giờ hoặc quá giờ bắt đầu -> ACTIVE luôn
                                 session.setStatus(AuctionStatus.ACTIVE);
                             }
-
                             auctionSessionRepository.save(session);
                         }
                     }

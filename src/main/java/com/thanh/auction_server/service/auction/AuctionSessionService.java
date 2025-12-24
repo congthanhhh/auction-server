@@ -173,7 +173,7 @@ public class AuctionSessionService {
 
         // Kiểm tra điều kiện thắng: Có người bid VÀ Max Bid >= Giá sàn (nếu có)
         if (winner != null && (reservePrice == null || finalMaxBid.compareTo(reservePrice) >= 0)) {
-            session.setStatus(AuctionStatus.PENDING_PAYMENT);
+            session.setStatus(AuctionStatus.ENDED);
             invoiceService.createInvoiceForWinner(session, winner);
         } else {
             session.setStatus(AuctionStatus.FAILED); // Không có người thắng hợp lệ
@@ -201,7 +201,7 @@ public class AuctionSessionService {
             String productName = session.getProduct().getName();
             String productLink = "/products/" + session.getProduct().getId(); // Ví dụ
 
-            if (session.getStatus() == AuctionStatus.PENDING_PAYMENT) {
+            if (session.getStatus() == AuctionStatus.ENDED) {
                 // Có người thắng
                 User winner = session.getHighestBidder();
                 // Gửi cho người thắng
@@ -218,7 +218,6 @@ public class AuctionSessionService {
                 String sellerFailMsg = String.format("Phiên đấu giá '%s' của bạn đã kết thúc mà không có người thắng.", productName);
                 notificationService.createNotification(seller, sellerFailMsg, productLink);
             }
-            // TODO (Sau này): Gửi thông báo WebSocket
 
         }
         return sessionsToEnd;
