@@ -35,6 +35,9 @@ public class VnPayConfig {
     @Value("${payment.vnPay.orderType:other}")
     private String orderType;
 
+    @Value("${payment.vnPay.transactionUrl}")
+    private String vnp_ApiUrl;
+
     // Hàm mã hóa dữ liệu theo chuẩn HMAC SHA512 của VNPay
     public String hmacSHA512(String key, String data) {
         try {

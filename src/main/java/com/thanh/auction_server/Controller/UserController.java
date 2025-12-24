@@ -43,6 +43,11 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 
+    @PatchMapping("/{id}/active-status")
+    ResponseEntity<String> updateUserActiveStatus(@PathVariable String id, @RequestBody Boolean isActive) {
+        return ResponseEntity.ok(userService.updateUserStatus(id, isActive));
+    }
+
     @GetMapping("/{id}")
     ResponseEntity<UserResponse> getUser(@PathVariable String id) {
         return ResponseEntity.ok(userService.getUser(id));

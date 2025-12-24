@@ -12,4 +12,6 @@ public interface InvoiceMapper {
     @Mapping(source = "product", target = "product")
     @Mapping(source = "auctionSession.id", target = "auctionSessionId")
     InvoiceResponse toInvoiceResponse(Invoice invoice);
+
+
 }

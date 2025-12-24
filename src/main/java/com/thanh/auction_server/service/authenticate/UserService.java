@@ -158,6 +158,15 @@ public class UserService {
         userRepository.delete(user);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    public String updateUserStatus(String id, Boolean isActive) {
+        User user = userRepository.findById(id).orElseThrow(
+                () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        user.setIsActive(isActive);
+        userRepository.save(user);
+        return isActive ? "User activated successfully" : "User deactivated successfully";
+    }
+
     public void createPassword(PasswordCreationRequest request) {
         var context = SecurityContextHolder.getContext();
         String name = context.getAuthentication().getName();

@@ -64,4 +64,11 @@ public class InvoiceController {
             @RequestBody @Validated DisputeRequest request) {
         return ResponseEntity.ok(invoiceService.reportDispute(id, request));
     }
+
+    @PostMapping("/disputes/{id}/resolve")
+    public ResponseEntity<MessageResponse> resolveDispute(
+            @PathVariable Long id,
+            @RequestBody ResolveDisputeRequest request) {
+        return ResponseEntity.ok(invoiceService.resolveDispute(id, request));
+    }
 }

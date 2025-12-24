@@ -78,10 +78,9 @@ public class BidService {
 
     public BidResponse placeBid(Long auctionSessionId, BidRequest request) {
         LocalDateTime now = LocalDateTime.now();
-        var session = auctionSessionRepository.findById(auctionSessionId)
+        var session = auctionSessionRepository.findByIdWithLock(auctionSessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND));
         Product product = session.getProduct();
-
 
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         var bidder = userRepository.findByUsername(username)
@@ -173,9 +172,6 @@ public class BidService {
                         reserveMetNow = true;
                     }
                 }
-                // *Lưu ý: Nếu đây là bid đầu tiên (currentHighestMaxBid = 0),
-                // logic trên vẫn đúng: newPrice sẽ là startPrice, sau đó check reservePrice sẽ ép lên sàn nếu cần.
-                // Tuy nhiên để chắc chắn cho bid đầu tiên:
                 if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0 && reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0) {
                     newPrice = reservePrice;
                 } else if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {

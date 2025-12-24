@@ -7,5 +7,6 @@ public enum InvoiceStatus {
     COMPLETED,              // Đã hoàn thành (Thành công) -> Kích hoạt Feedback
     DISPUTE,                // Đang khiếu nại (Buyer báo chưa nhận được hàng)
     CANCELLED_NON_PAYMENT,  // Hủy do bùng hàng
-    CANCELLED_BY_SELLER     // Hủy bởi người bán
+    CANCELLED_BY_SELLER,     // Hủy bởi người bán
+    REFUNDED
 }

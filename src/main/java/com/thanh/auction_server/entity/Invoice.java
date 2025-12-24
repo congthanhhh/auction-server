@@ -62,4 +62,7 @@ public class Invoice {
 
     @Enumerated(EnumType.STRING)
     InvoiceType type;
+
+    @Column(name = "payment_time")
+    private String paymentTime;
 }

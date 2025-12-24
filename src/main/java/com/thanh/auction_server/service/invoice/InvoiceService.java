@@ -3,7 +3,9 @@ package com.thanh.auction_server.service.invoice;
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.constants.FeedbackRating;
 import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.constants.InvoiceType;
 import com.thanh.auction_server.dto.request.DisputeRequest;
+import com.thanh.auction_server.dto.request.ResolveDisputeRequest;
 import com.thanh.auction_server.dto.request.ShipInvoiceRequest;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
@@ -19,6 +21,7 @@ import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.UserRepository;
 import com.thanh.auction_server.service.auction.NotificationService;
 import com.thanh.auction_server.service.authenticate.UserService;
+import com.thanh.auction_server.service.payment.PaymentService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -45,6 +48,7 @@ public class InvoiceService {
     FeedbackRepository feedbackRepository;
     InvoiceMapper invoiceMapper;
     UserService userService;
+    PaymentService paymentService;
     NotificationService notificationService;
 
     @Transactional
@@ -57,6 +61,7 @@ public class InvoiceService {
                 .product(session.getProduct())
                 .finalPrice(session.getCurrentPrice())
                 .status(InvoiceStatus.PENDING)
+                .type(InvoiceType.AUCTION_SALE)
                 .createdAt(LocalDateTime.now())
                 .dueDate(dueDate)
                 .build();
@@ -270,17 +275,52 @@ public class InvoiceService {
     }
 
     @Transactional
-    public void createFeeInvoiceForSeller(AuctionSession session, String feeType) {
-        // ... Logic tính phí ...
-        // BigDecimal fee = BigDecimal.valueOf(10000); // Ví dụ 10,000đ
-        // Invoice invoice = Invoice.builder()
-        //     .user(session.getProduct().getSeller()) // Người bán
-        //     .auctionSession(session)
-        //     .product(session.getProduct())
-        //     .finalPrice(fee)
-        //     .status(InvoiceStatus.PENDING)
-        //     // ...
-        // invoiceRepository.save(invoice);
-        log.info("Tạm thời chưa implement thu phí giá sàn.");
+    public MessageResponse resolveDispute(Long disputeId, ResolveDisputeRequest request) {
+        Dispute dispute = disputeRepository.findById(disputeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dispute not found"));
+        Invoice invoice = dispute.getInvoice();
+        if (invoice.getStatus() != InvoiceStatus.DISPUTE) {
+            throw new DataConflictException("Hóa đơn này không trong trạng thái tranh chấp.");
+        }
+        // Xử lý theo quyết định của Admin
+        if (request.getDecision() == ResolveDisputeRequest.DisputeDecision.REFUND_TO_BUYER) {
+            // A. BUYER THẮNG
+            log.info("Bắt đầu quy trình hoàn tiền cho Invoice ID: {}", invoice.getId());
+            invoice.setStatus(InvoiceStatus.REFUNDED);
+            try {
+                paymentService.refundTransaction(invoice.getId());
+                log.info("Gọi API hoàn tiền thành công");
+            } catch (Exception e) {
+                throw new RuntimeException("Không thể hoàn tiền qua VNPay: " + e.getMessage());
+            }
+            notificationService.createNotification(invoice.getUser(),
+                    "Khiếu nại đơn hàng " + invoice.getProduct().getName() + " thành công. Bạn sẽ được hoàn tiền.",
+                    "/invoices/" + invoice.getId());
+
+            notificationService.createNotification(invoice.getProduct().getSeller(),
+                    "Khiếu nại đơn hàng " + invoice.getProduct().getName() + ": Admin phán quyết Người mua thắng.",
+                    "/invoices/" + invoice.getId());
+
+        } else {
+            // B. SELLER THẮNG
+            invoice.setStatus(InvoiceStatus.COMPLETED);
+
+            notificationService.createNotification(invoice.getUser(),
+                    "Khiếu nại đơn hàng " + invoice.getProduct().getName() + " bị từ chối. Giao dịch hoàn tất.",
+                    "/invoices/" + invoice.getId());
+
+            notificationService.createNotification(invoice.getProduct().getSeller(),
+                    "Khiếu nại đơn hàng " + invoice.getProduct().getName() + ": Admin phán quyết Bạn thắng. Tiền đã được giải ngân.",
+                    "/invoices/" + invoice.getId());
+        }
+        invoiceRepository.save(invoice);
+
+        // Cập nhật trạng thái Dispute
+         dispute.setAdminNote(request.getAdminNote());
+         disputeRepository.save(dispute);
+
+        return MessageResponse.builder()
+                .message("Đã giải quyết khiếu nại thành công.")
+                .build();
     }
 }

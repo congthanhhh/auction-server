@@ -60,4 +60,5 @@ payment:
     tmnCode: "${VNPAY_TMN_CODE}"
     hashSecret: "${VNPAY_HASH_SECRET}"
     returnUrl: "http://localhost:3000/payment-result"
+    transactionUrl: "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction"
 
