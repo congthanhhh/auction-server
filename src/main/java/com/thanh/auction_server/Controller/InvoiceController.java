@@ -34,12 +34,6 @@ public class InvoiceController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{id}/pay")
-    public ResponseEntity<String> createPaymentForInvoice(@PathVariable Long id) {
-
-        return ResponseEntity.ok("Chức năng thanh toán sẽ được implement sau.");
-    }
-
     @PostMapping("/{id}/report-nonpayment")
     public ResponseEntity<MessageResponse> reportNonPayment(@PathVariable Long id) {
         MessageResponse response = invoiceService.reportNonPayment(id);

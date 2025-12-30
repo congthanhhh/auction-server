@@ -12,6 +12,8 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/products")
@@ -31,10 +33,9 @@ public class ProductController {
         return ResponseEntity.<PageResponse<ProductResponse>>ok(productService.getAllProducts(page, size));
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
-        ProductResponse product = productService.getProductById(id);
-        return ResponseEntity.ok(product);
+    @GetMapping("/my-products")
+    public ResponseEntity<List<ProductResponse>> getMyProducts() {
+        return ResponseEntity.ok(productService.getProductsBySellerUsername());
     }
 
     @PutMapping("/{id}")
@@ -42,6 +43,13 @@ public class ProductController {
         ProductResponse updatedProduct = productService.updateProduct(id, request);
         return ResponseEntity.ok(updatedProduct);
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
+        ProductResponse product = productService.getProductById(id);
+        return ResponseEntity.ok(product);
+    }
+
 
     @GetMapping("/search")
     public ResponseEntity<PageResponse<ProductResponse>> searchProducts(

@@ -21,7 +21,7 @@ public class AuctionSessionResponse {
     BigDecimal currentPrice;
     BigDecimal buyNowPrice;
     AuctionStatus status;
-    SimpleProductResponse product;
+    ProductResponse product;
     SimpleUserResponse highestBidder;
     boolean reservePriceMet;
     BigDecimal myMaxBid;

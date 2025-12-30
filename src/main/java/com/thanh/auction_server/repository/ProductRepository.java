@@ -5,6 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,4 +17,11 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     Optional<Product> findByIdAndIsActiveTrue(Long id);
     List<Product> findBySeller_Id(String sellerId);
+
+    List<Product> findAllBySeller_UsernameAndIsActiveTrue(String username);
+
+    // In ProductRepository.java
+    @Query("SELECT p FROM Product p WHERE p.seller.username = :username AND p.isActive = true AND p.id NOT IN (SELECT a.product.id FROM AuctionSession a)")
+    List<Product> findAllBySeller_UsernameAndIsActiveTrueAndNotInAuctionSession(@Param("username") String username);
+
 }

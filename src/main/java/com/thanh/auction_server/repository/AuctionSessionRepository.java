@@ -36,4 +36,12 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
     @Query("SELECT a FROM AuctionSession a WHERE a.id = :id")
     Optional<AuctionSession> findByIdWithLock(@Param("id") Long id);
 
+    // Tìm các phiên đấu giá theo trạng thái và sắp xếp theo createdAt (có phân trang)
+    Page<AuctionSession> findByStatusOrderByCreatedAtAsc(AuctionStatus status, Pageable pageable);
+
+    // Hoặc sắp xếp giảm dần (mới nhất trước) (có phân trang)
+    Page<AuctionSession> findByStatusOrderByCreatedAtDesc(AuctionStatus status, Pageable pageable);
+
+
+
 }

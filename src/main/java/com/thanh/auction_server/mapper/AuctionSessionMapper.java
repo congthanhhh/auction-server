@@ -27,7 +27,7 @@ public interface AuctionSessionMapper {
     @Mapping(target = "updatedAt", ignore = true)
     AuctionSession toAuctionSession(AuctionSessionRequest request);
 
-    @Mapping(source = "product", target = "product", qualifiedByName = "productToSimpleProductResponse") // Cần hàm map Product -> SimpleProductResponse
+    @Mapping(source = "product", target = "product")
     @Mapping(source = "highestBidder", target = "highestBidder", qualifiedByName = "userToSimpleUserResponse") // Cần hàm map User -> SimpleUserResponse
     @Mapping(target = "reservePriceMet", expression = "java(calculateReserveMet(auctionSession))")
     @Mapping(target = "myMaxBid", expression = "java(calculateMyMaxBid(auctionSession))")

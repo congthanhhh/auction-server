@@ -27,6 +27,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -76,6 +77,7 @@ public class BidService {
         return currentPrice.add(calculateIncrement(currentPrice));
     }
 
+    @Transactional
     public BidResponse placeBid(Long auctionSessionId, BidRequest request) {
         LocalDateTime now = LocalDateTime.now();
         var session = auctionSessionRepository.findByIdWithLock(auctionSessionId)
@@ -299,7 +301,7 @@ public class BidService {
             boolean reserveMetBefore,
             Product product) {
 
-        String link = "/auctions/" + savedBid.getAuctionSession().getId();
+        String link = "/auction/" + savedBid.getAuctionSession().getId();
         String productName = product.getName();
 
         if (isNewHighestBidder) {

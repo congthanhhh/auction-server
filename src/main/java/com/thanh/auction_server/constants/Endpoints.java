@@ -7,8 +7,8 @@ public final class Endpoints {
             "/products/**",
             "/bids/**",
             "/auctions/**",
-
-//           test api
+            "auction-sessions/**",
+            
     };
 
     public static final String[] PUBLIC_POST_ENDPOINTS = {
@@ -23,7 +23,6 @@ public final class Endpoints {
             "/users/otp",
             "/categories/**",
 
-            // test api
 
     };
 }

@@ -138,6 +138,35 @@ public class AuctionSessionService {
                 .build();
     }
 
+    public PageResponse<AuctionSessionResponse> getAllAuctionActiveDesc(int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<AuctionSession> sessionPage =
+                auctionSessionRepository.findByStatusOrderByCreatedAtDesc(AuctionStatus.ACTIVE, pageable);
+        return PageResponse.<AuctionSessionResponse>builder()
+                .currentPage(page)
+                .totalPages(sessionPage.getTotalPages())
+                .pageSize(sessionPage.getSize())
+                .totalElements(sessionPage.getTotalElements())
+                .data(sessionPage.getContent().stream()
+                        .map(auctionSessionMapper::toAuctionSessionResponse)
+                        .toList())
+                .build();
+    }
+
+    public PageResponse<AuctionSessionResponse> getAllAuctionScheduleDesc(int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<AuctionSession> sessionPage =
+                auctionSessionRepository.findByStatusOrderByCreatedAtDesc(AuctionStatus.SCHEDULED, pageable);
+        return PageResponse.<AuctionSessionResponse>builder()
+                .currentPage(page)
+                .totalPages(sessionPage.getTotalPages())
+                .pageSize(sessionPage.getSize())
+                .totalElements(sessionPage.getTotalElements())
+                .data(sessionPage.getContent().stream()
+                        .map(auctionSessionMapper::toAuctionSessionResponse)
+                        .toList())
+                .build();
+    }
 
     // Lấy chi tiết một phiên đấu giá
     public AuctionSessionResponse getAuctionSessionById(Long id) {

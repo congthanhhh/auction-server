@@ -41,6 +41,12 @@ public class CategoryService {
                 .collect(Collectors.toList());
     }
 
+    public CategoryResponse getCategoryById(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + id));
+        return categoryMapper.toCategoryResponse(category);
+    }
+
     public CategoryResponse updateCategory(Long id, CategoryRequest request) {
         Category existingCategory = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + id));

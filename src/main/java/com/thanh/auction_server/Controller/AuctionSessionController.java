@@ -41,4 +41,22 @@ public class AuctionSessionController {
         AuctionSessionResponse response = auctionSessionService.getAuctionSessionById(id);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/active-desc")
+    public ResponseEntity<PageResponse<AuctionSessionResponse>> getActiveAuctionSessionsDesc(
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
+        PageResponse<AuctionSessionResponse> response =
+                auctionSessionService.getAllAuctionActiveDesc(page, size);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/schedule-desc")
+    public ResponseEntity<PageResponse<AuctionSessionResponse>> getScheduleAuctionSessionsDesc(
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
+        PageResponse<AuctionSessionResponse> response =
+                auctionSessionService.getAllAuctionScheduleDesc(page, size);
+        return ResponseEntity.ok(response);
+    }
 }

@@ -92,6 +92,14 @@ public class ProductService {
                 .build();
     }
 
+    public List<ProductResponse> getProductsBySellerUsername() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        var products = productRepository.findAllBySeller_UsernameAndIsActiveTrueAndNotInAuctionSession(username);
+        return products.stream()
+                .map(productMapper::toProductResponse)
+                .collect(Collectors.toList());
+    }
+
     public ProductResponse getProductById(Long id) {
         var product = productRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
