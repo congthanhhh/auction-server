@@ -28,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,6 +128,21 @@ public class AuctionSessionService {
             return cb.conjunction();
         };
         Page<AuctionSession> sessionPage = auctionSessionRepository.findAll(spec, pageable);
+        return PageResponse.<AuctionSessionResponse>builder()
+                .currentPage(page)
+                .totalPages(sessionPage.getTotalPages())
+                .pageSize(sessionPage.getSize())
+                .totalElements(sessionPage.getTotalElements())
+                .data(sessionPage.getContent().stream()
+                        .map(auctionSessionMapper::toAuctionSessionResponse)
+                        .toList())
+                .build();
+    }
+
+    public PageResponse<AuctionSessionResponse> getMyAuctionSessions(AuctionStatus status, int page, int size) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<AuctionSession> sessionPage = auctionSessionRepository.findBySellerUsernameAndStatus(username, status, pageable);
         return PageResponse.<AuctionSessionResponse>builder()
                 .currentPage(page)
                 .totalPages(sessionPage.getTotalPages())

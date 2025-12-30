@@ -1,5 +1,6 @@
 package com.thanh.auction_server.Controller;
 
+import com.thanh.auction_server.constants.InvoiceStatus;
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
@@ -26,6 +27,32 @@ public class InvoiceController {
             @RequestParam(value = "size", defaultValue = "10") int size) {
         PageResponse<InvoiceResponse> response = invoiceService.getMyInvoices(page, size);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my-sales")
+    public ResponseEntity<PageResponse<InvoiceResponse>> getMySales(
+            @RequestParam(value = "status", required = false) InvoiceStatus status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
+
+        return ResponseEntity.ok(invoiceService.getMySales(status, page, size));
+    }
+
+    @GetMapping("/my-listing-fees")
+    public ResponseEntity<PageResponse<InvoiceResponse>> getMyListingFees(
+            @RequestParam(value = "status", required = false) InvoiceStatus status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
+
+        return ResponseEntity.ok(invoiceService.getMyListingFees(status, page, size));
+    }
+
+    @GetMapping("/sold-invoices")
+    public ResponseEntity<PageResponse<InvoiceResponse>> getAllSellerInvoices(
+            @RequestParam(value = "status", required = false) InvoiceStatus status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
+        return ResponseEntity.ok(invoiceService.getInvoicesBySeller(status, page, size));
     }
 
     @GetMapping("/{id}")

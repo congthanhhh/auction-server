@@ -42,6 +42,15 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
     // Hoặc sắp xếp giảm dần (mới nhất trước) (có phân trang)
     Page<AuctionSession> findByStatusOrderByCreatedAtDesc(AuctionStatus status, Pageable pageable);
 
+    @Query("SELECT a FROM AuctionSession a " +
+            "WHERE a.product.seller.username = :username " +
+            "AND (:status IS NULL OR a.status = :status) " +
+            "ORDER BY a.createdAt DESC")
+    Page<AuctionSession> findBySellerUsernameAndStatus(
+            @Param("username") String username,
+            @Param("status") AuctionStatus status,
+            Pageable pageable);
+
 
 
 }

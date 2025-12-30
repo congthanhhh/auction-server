@@ -1,6 +1,7 @@
 package com.thanh.auction_server.dto.response;
 
 import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.constants.InvoiceType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -23,4 +24,13 @@ public class InvoiceResponse {
     InvoiceStatus status;
     LocalDateTime createdAt;
     LocalDateTime dueDate;
+    InvoiceType type;
+
+    String shippingAddress;
+    String recipientName;
+    String recipientPhone;
+    String trackingCode;
+    String carrier;
+    LocalDateTime shippedAt;
+    LocalDateTime paymentTime;
 }

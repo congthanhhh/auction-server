@@ -92,14 +92,30 @@ public class InvoiceService {
                 .build();
     }
 
+    public PageResponse<InvoiceResponse> getInvoicesBySeller(InvoiceStatus status, int page, int size) {
+        return getInvoicesForSeller(status, null, page, size); // null type = lấy tất cả
+    }
+
+    // API lấy đơn hàng bán ra (Doanh thu) -> AUCTION_SALE
+    public PageResponse<InvoiceResponse> getMySales(InvoiceStatus status, int page, int size) {
+        return getInvoicesForSeller(status, InvoiceType.AUCTION_SALE, page, size);
+    }
+
+    // API lấy hóa đơn phí sàn (Chi phí) -> LISTING_FEE
+    public PageResponse<InvoiceResponse> getMyListingFees(InvoiceStatus status, int page, int size) {
+        return getInvoicesForSeller(status, InvoiceType.LISTING_FEE, page, size);
+    }
+
     public InvoiceResponse getInvoiceById(Long id) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Invoice invoice = invoiceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + id));
 
-        if (!invoice.getUser().getUsername().equals(username)) {
-            log.warn("User '{}' cố gắng truy cập hóa đơn ID {} của user '{}'",
-                    username, id, invoice.getUser().getUsername());
+        boolean isBuyer = invoice.getUser().getUsername().equals(username);
+        boolean isSeller = invoice.getProduct().getSeller().getUsername().equals(username);
+
+        if (!isBuyer && !isSeller) {
+            log.warn("User '{}' cố gắng truy cập hóa đơn ID {} mà không có quyền", username, id);
             throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
         }
 
@@ -321,6 +337,25 @@ public class InvoiceService {
 
         return MessageResponse.builder()
                 .message("Đã giải quyết khiếu nại thành công.")
+                .build();
+    }
+
+    private PageResponse<InvoiceResponse> getInvoicesForSeller(InvoiceStatus status, InvoiceType type, int page, int size) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<Invoice> invoicePage = invoiceRepository.findBySellerUsernameStatusAndType(username, status, type, pageable);
+
+        List<InvoiceResponse> responses = invoicePage.getContent()
+                .stream()
+                .map(invoiceMapper::toInvoiceResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.<InvoiceResponse>builder()
+                .currentPage(page)
+                .totalPages(invoicePage.getTotalPages())
+                .pageSize(invoicePage.getSize())
+                .totalElements(invoicePage.getTotalElements())
+                .data(responses)
                 .build();
     }
 }

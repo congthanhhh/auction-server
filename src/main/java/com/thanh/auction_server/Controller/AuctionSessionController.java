@@ -36,6 +36,16 @@ public class AuctionSessionController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/my-sessions")
+    public ResponseEntity<PageResponse<AuctionSessionResponse>> getMyAuctionSessions(
+            @RequestParam(value = "status", required = false) AuctionStatus status,
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
+
+        PageResponse<AuctionSessionResponse> response = auctionSessionService.getMyAuctionSessions(status, page, size);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<AuctionSessionResponse> getAuctionSessionById(@PathVariable Long id) {
         AuctionSessionResponse response = auctionSessionService.getAuctionSessionById(id);
