@@ -22,6 +22,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     List<Invoice> findByStatusAndShippedAtBefore(InvoiceStatus status, LocalDateTime date);
 
+    boolean existsByAuctionSessionIdAndType(Long auctionSessionId, InvoiceType type);
+
     @Query("SELECT i FROM Invoice i " +
             "WHERE i.product.seller.username = :username " +
             "AND (:status IS NULL OR i.status = :status) " +
@@ -41,4 +43,15 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             @Param("status") InvoiceStatus status,
             @Param("type") InvoiceType type,
             Pageable pageable);
+
+    // --- THÊM ĐOẠN NÀY ---
+    // Tính tổng tiền (amount) các hóa đơn bán hàng có trạng thái nằm trong danh sách statuses
+    // COALESCE(..., 0) để trả về 0 nếu không có đơn nào (tránh lỗi null)
+    @Query("SELECT COALESCE(SUM(i.finalPrice), 0) FROM Invoice i " +
+            "WHERE i.product.seller.username = :username " +
+            "AND i.type = 'AUCTION_SALE' " +
+            "AND i.status IN :statuses")
+    Long sumRevenueBySellerAndStatus(
+            @Param("username") String username,
+            @Param("statuses") List<InvoiceStatus> statuses);
 }

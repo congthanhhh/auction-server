@@ -5,6 +5,8 @@ import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
+import com.thanh.auction_server.dto.response.SellerRevenueResponse;
+import com.thanh.auction_server.service.invoice.DashboardService;
 import com.thanh.auction_server.service.invoice.InvoiceService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class InvoiceController {
 
     InvoiceService invoiceService;
+    private final DashboardService dashboardService;
 
     @GetMapping("/my-invoices")
     public ResponseEntity<PageResponse<InvoiceResponse>> getMyInvoices(
@@ -91,5 +94,10 @@ public class InvoiceController {
             @PathVariable Long id,
             @RequestBody ResolveDisputeRequest request) {
         return ResponseEntity.ok(invoiceService.resolveDispute(id, request));
+    }
+
+    @GetMapping("/seller-stats")
+    public ResponseEntity<SellerRevenueResponse> getSellerStats() {
+        return ResponseEntity.ok(dashboardService.getSellerDashboard());
     }
 }

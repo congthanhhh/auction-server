@@ -26,8 +26,8 @@ public class Invoice {
     @JoinColumn(name = "user_id", nullable = false)
     User user;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "auction_session_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "auction_session_id", nullable = false)
     AuctionSession auctionSession;
 
     @ManyToOne(fetch = FetchType.LAZY)

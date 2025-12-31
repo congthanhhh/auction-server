@@ -53,7 +53,7 @@ public class AuctionScheduler {
 
                 // Chuẩn bị dữ liệu kết quả cuối cùng
                 var finalResult = Map.of(
-                        "status", session.getStatus().name(), // FAILED hoặc PENDING_PAYMENT
+                        "status", session.getStatus().name(),
                         "finalPrice", session.getCurrentPrice(),
                         // Kiểm tra null cho highestBidder trước khi map
                         "winner", session.getHighestBidder() != null

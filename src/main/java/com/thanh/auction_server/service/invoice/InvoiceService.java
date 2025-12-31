@@ -53,6 +53,13 @@ public class InvoiceService {
 
     @Transactional
     public void createInvoiceForWinner(AuctionSession session, User winner) {
+
+        // Chỉ chặn nếu đã tồn tại hóa đơn loại AUCTION_SALE cho phiên này
+        // Không quan tâm nếu đã có hóa đơn LISTING_FEE
+        if (invoiceRepository.existsByAuctionSessionIdAndType(session.getId(), InvoiceType.AUCTION_SALE)) {
+            log.warn("Invoice Sale already exists for Auction Session ID: {}", session.getId());
+            return;
+        }
         LocalDateTime dueDate = LocalDateTime.now().plusDays(4);
 
         Invoice invoice = Invoice.builder()

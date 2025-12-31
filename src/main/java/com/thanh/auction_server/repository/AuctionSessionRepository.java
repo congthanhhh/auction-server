@@ -51,6 +51,8 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
             @Param("status") AuctionStatus status,
             Pageable pageable);
 
+    @Query("SELECT COUNT(a) FROM AuctionSession a WHERE a.product.seller.username = :username")
+    long countBySellerUsername(@Param("username") String username);
 
 
 }
