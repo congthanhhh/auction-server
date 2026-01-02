@@ -250,46 +250,22 @@ public class UserService {
         // notificationService.createNotification(user, "Bạn đã nhận 1 điểm phạt do không thanh toán.", "/my-strikes");
     }
 
-    public UserProfileResponse getPublicProfile(String userId) {
-        // 1. Lấy thông tin User
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+//    public UserProfileResponse getMyProfile() {
+//        var context = SecurityContextHolder.getContext();
+//        String currentUsername = context.getAuthentication().getName();
+//        User user = userRepository.findByUsername(currentUsername)
+//                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+//        return userMapper.toUserProfileResponse(user);
+//    }
 
-        // 2. Lấy danh sách Feedback gần nhất (Lấy 5 cái đầu tiên)
-        List<FeedbackDto> recentFeedbacks = feedbackRepository.findByToUser_IdOrderByCreatedAtDesc(userId, PageRequest.of(0, 5))
-                .getContent()
-                .stream()
-                .map(fb -> FeedbackDto.builder()
-                        .id(fb.getId())
-                            .fromUsername(fb.getFromUser().getUsername()) // Ẩn danh tính chi tiết, chỉ hiện username
-                        .rating(fb.getRating())
-                        .comment(fb.getComment())
-                        .createdAt(fb.getCreatedAt())
-                        .productName(fb.getInvoice().getProduct().getName())
-                        .build())
-                .collect(Collectors.toList());
-
-        // 3. Đếm tổng feedback
-        long totalFeedbacks = feedbackRepository.countByToUser_Id(userId);
-
-        // 4. Lấy danh sách sản phẩm đang bán
-        List<ProductResponse> products = productRepository.findBySeller_Id(userId)
-                .stream()
-                .map(productMapper::toProductResponse) // Dùng Mapper có sẵn
-                .limit(10) // Chỉ lấy 10 sản phẩm tượng trưng (hoặc phân trang nếu muốn)
-                .collect(Collectors.toList());
-
-        // 5. Build Response
-        return UserProfileResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .reputationScore(user.getReputationScore() == null ? 0 : user.getReputationScore()) // Lấy điểm uy tín
-                .totalFeedbacks((int) totalFeedbacks)
-                .recentFeedbacks(recentFeedbacks)
-                .products(products)
-                .build();
+    public UserProfileResponse getMyProfile() {
+        var context = SecurityContextHolder.getContext();
+        String name = context.getAuthentication().getName();
+        User user = userRepository.findByUsername(name).orElseThrow(
+                () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        var userResponse = userMapper.toUserProfileResponse(user);
+        userResponse.setNoPassword(!StringUtils.hasText(user.getPassword()));
+        return userResponse;
     }
 
 }

@@ -30,4 +30,9 @@ public class FeedBackController {
             @RequestBody @Valid FeedbackRequest request) {
         return ResponseEntity.ok(feedbackService.updateFeedback(id, request));
     }
+
+    @GetMapping("/my-total-feedback")
+    public ResponseEntity<Long> getMyTotalFeedback() {
+        return ResponseEntity.ok(feedbackService.countFeedbacksForUser());
+    }
 }

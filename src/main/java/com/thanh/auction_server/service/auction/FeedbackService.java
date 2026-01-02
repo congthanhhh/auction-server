@@ -111,4 +111,11 @@ public class FeedbackService {
         return "Feedback updated successfully.";
 
     }
+
+    public Long countFeedbacksForUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
+        return feedbackRepository.countByToUser_Id(currentUser.getId());
+    }
 }

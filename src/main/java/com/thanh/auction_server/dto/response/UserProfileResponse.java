@@ -3,22 +3,23 @@ package com.thanh.auction_server.dto.response;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @Builder
 public class UserProfileResponse {
-
     String id;
     String username;
     String firstName;
     String lastName;
     String email;
     String phoneNumber;
-
+    boolean noPassword;
+    Boolean isActive;
+    Integer strikeCount;
     Integer reputationScore;
-    Integer totalFeedbacks;
-
-    List<FeedbackDto> recentFeedbacks; // 5 đánh giá gần nhất
-    List<ProductResponse> products;    // Các sản phẩm đang bán (dùng lại ProductResponse cũ)
+    LocalDateTime createdAt;
+    Set<RoleResponse> roles;
 }

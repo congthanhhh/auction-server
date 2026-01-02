@@ -87,9 +87,9 @@ public class UserController {
         return ResponseEntity.ok(userService.resetPassword(request));
     }
 
-    @GetMapping("/{id}/profile")
-    public ResponseEntity<UserProfileResponse> getPublicProfile(@PathVariable String id) {
-        return ResponseEntity.ok(userService.getPublicProfile(id));
+    @GetMapping("/my-profile")
+    public ResponseEntity<UserProfileResponse> getPublicProfile() {
+        return ResponseEntity.ok(userService.getMyProfile());
     }
 
 }
