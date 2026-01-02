@@ -27,9 +27,6 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
     // Tìm các phiên đấu giá đang hoạt động và sắp kết thúc (status = ACTIVE và endTime <= now)
     List<AuctionSession> findByStatusAndEndTimeLessThanEqual(AuctionStatus status, LocalDateTime now);
 
-    // Tìm phiên đấu giá bằng ID sản phẩm (vì là OneToOne)
-    // Optional<AuctionSession> findByProductId(Long productId);
-
     boolean existsByProduct_Id(Long productId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -53,6 +50,23 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
 
     @Query("SELECT COUNT(a) FROM AuctionSession a WHERE a.product.seller.username = :username")
     long countBySellerUsername(@Param("username") String username);
+
+    @Query("SELECT a FROM AuctionSession a " +
+            "LEFT JOIN a.bids b " +
+            "WHERE a.status = :status " +
+            "GROUP BY a " +
+            "ORDER BY COUNT(b) DESC")
+    List<AuctionSession> findTopPopularSessions(@Param("status") AuctionStatus status, Pageable pageable);
+
+    @Query("SELECT DISTINCT a FROM AuctionSession a " +
+            "JOIN a.bids b " +
+            "WHERE b.user.username = :username " +
+            "AND (:status IS NULL OR a.status = :status) " +
+            "ORDER BY a.endTime ASC")
+    Page<AuctionSession> findSessionsByBidder(
+            @Param("username") String username,
+            @Param("status") AuctionStatus status,
+            Pageable pageable);
 
 
 }

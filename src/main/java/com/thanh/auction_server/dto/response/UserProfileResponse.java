@@ -16,8 +16,8 @@ public class UserProfileResponse {
     String email;
     String phoneNumber;
 
-    Integer reputationScore; // Điểm uy tín (+15, -2...)
-    Integer totalFeedbacks;  // Tổng số lượt đánh giá
+    Integer reputationScore;
+    Integer totalFeedbacks;
 
     List<FeedbackDto> recentFeedbacks; // 5 đánh giá gần nhất
     List<ProductResponse> products;    // Các sản phẩm đang bán (dùng lại ProductResponse cũ)

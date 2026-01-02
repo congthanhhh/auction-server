@@ -78,24 +78,19 @@ public class InvoiceService {
 
     }
 
-    public PageResponse<InvoiceResponse> getMyInvoices(int page, int size) {
+    public PageResponse<InvoiceResponse> getMyInvoices(InvoiceStatus status, InvoiceType type, int page, int size) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND));
         Pageable pageable = PageRequest.of(page - 1, size);
-
-        Page<Invoice> invoicePage = invoiceRepository.findByUser_IdOrderByCreatedAtDesc(user.getId(), pageable);
-        List<InvoiceResponse> responses = invoicePage.getContent()
-                .stream()
-                .map(invoiceMapper::toInvoiceResponse)
-                .collect(Collectors.toList());
+        Page<Invoice> invoicePage = invoiceRepository.findByUserUsernameAndStatusAndType(username, status, type, pageable);
 
         return PageResponse.<InvoiceResponse>builder()
                 .currentPage(page)
                 .totalPages(invoicePage.getTotalPages())
                 .pageSize(invoicePage.getSize())
                 .totalElements(invoicePage.getTotalElements())
-                .data(responses)
+                .data(invoicePage.getContent().stream()
+                        .map(invoiceMapper::toInvoiceResponse)
+                        .toList())
                 .build();
     }
 
@@ -339,8 +334,8 @@ public class InvoiceService {
         invoiceRepository.save(invoice);
 
         // Cập nhật trạng thái Dispute
-         dispute.setAdminNote(request.getAdminNote());
-         disputeRepository.save(dispute);
+        dispute.setAdminNote(request.getAdminNote());
+        disputeRepository.save(dispute);
 
         return MessageResponse.builder()
                 .message("Đã giải quyết khiếu nại thành công.")

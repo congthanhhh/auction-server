@@ -13,18 +13,23 @@ import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/auction-sessions/{sessionId}/bids")
+@RequestMapping("/auction-sessions")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BidController {
     BidService bidService;
 
-    @PostMapping
+    @PostMapping("/{sessionId}/bids")
     public ResponseEntity<BidResponse> placeBid(@PathVariable Long sessionId,
                                                 @RequestBody @Valid BidRequest request) {
         return ResponseEntity.ok(bidService.placeBid(sessionId, request));
     }
 
-    @GetMapping
+    @GetMapping("/count/{productId}")
+    public ResponseEntity<Long> getBidCountByProduct(@PathVariable Long productId) {
+        return ResponseEntity.ok(bidService.getBidCountByProduct(productId));
+    }
+
+    @GetMapping("/{sessionId}/bids")
     public ResponseEntity<PageResponse<BidResponse>> getBidHistory(
             @PathVariable Long sessionId,
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,

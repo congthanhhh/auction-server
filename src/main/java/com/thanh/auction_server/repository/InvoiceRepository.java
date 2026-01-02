@@ -44,9 +44,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             @Param("type") InvoiceType type,
             Pageable pageable);
 
-    // --- THÊM ĐOẠN NÀY ---
-    // Tính tổng tiền (amount) các hóa đơn bán hàng có trạng thái nằm trong danh sách statuses
-    // COALESCE(..., 0) để trả về 0 nếu không có đơn nào (tránh lỗi null)
     @Query("SELECT COALESCE(SUM(i.finalPrice), 0) FROM Invoice i " +
             "WHERE i.product.seller.username = :username " +
             "AND i.type = 'AUCTION_SALE' " +
@@ -54,4 +51,15 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     Long sumRevenueBySellerAndStatus(
             @Param("username") String username,
             @Param("statuses") List<InvoiceStatus> statuses);
+
+    @Query("SELECT i FROM Invoice i " +
+            "WHERE i.user.username = :username " +
+            "AND (:status IS NULL OR i.status = :status) " +
+            "AND (:type IS NULL OR i.type = :type) " +
+            "ORDER BY i.createdAt DESC")
+    Page<Invoice> findByUserUsernameAndStatusAndType(
+            @Param("username") String username,
+            @Param("status") InvoiceStatus status,
+            @Param("type") InvoiceType type,
+            Pageable pageable);
 }

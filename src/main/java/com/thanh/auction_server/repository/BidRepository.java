@@ -22,4 +22,6 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
 
     // Đếm số lượng bid cho một phiên
      long countByAuctionSessionId(Long auctionSessionId);
+
+    long countByAuctionSession_Product_Id(Long productId);
 }

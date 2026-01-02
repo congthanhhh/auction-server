@@ -18,4 +18,5 @@ public class SimpleUserResponse {
     String firstName;
     String lastName;
     String email;
+    String phoneNumber;
 }

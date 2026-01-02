@@ -77,6 +77,10 @@ public class BidService {
         return currentPrice.add(calculateIncrement(currentPrice));
     }
 
+    public long getBidCountByProduct(Long productId) {
+        return bidRepository.countByAuctionSession_Product_Id(productId);
+    }
+
     @Transactional
     public BidResponse placeBid(Long auctionSessionId, BidRequest request) {
         LocalDateTime now = LocalDateTime.now();
@@ -174,11 +178,26 @@ public class BidService {
                         reserveMetNow = true;
                     }
                 }
-                if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0 && reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0) {
-                    newPrice = reservePrice;
-                } else if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {
-                    newPrice = session.getStartPrice();
+//                if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0 && reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0) {
+//                    newPrice = reservePrice;
+//                } else if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {
+//                    newPrice = session.getStartPrice();
+//                }
+
+                if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {
+                    // Kiểm tra giá sàn có thực sự tồn tại (phải lớn hơn 0)
+                    boolean hasRealReserve = reservePrice != null && reservePrice.compareTo(BigDecimal.ZERO) > 0;
+                    if (hasRealReserve && newMaxBid.compareTo(reservePrice) >= 0) {
+                        // Trường hợp 1: Có giá sàn (>0) và người dùng đặt giá cao hơn hoặc bằng sàn
+                        // Giá hiện tại sẽ nhảy lên bằng Giá sàn
+                        newPrice = reservePrice.max(session.getStartPrice());
+                    } else {
+                        // Trường hợp 2: Không có giá sàn (hoặc = 0) HOẶC người dùng đặt chưa tới sàn
+                        // Giá hiện tại sẽ bắt đầu từ Giá khởi điểm
+                        newPrice = session.getStartPrice();
+                    }
                 }
+
                 session.setCurrentPrice(newPrice);
                 savedBid = bidRepository.save(Bid.builder()
                         .amount(newMaxBid)

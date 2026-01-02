@@ -41,7 +41,7 @@ public class AddressController {
         return ResponseEntity.ok(addressService.updateAddress(id, request));
     }
 
-    @PutMapping("/{id}/default")
+    @PatchMapping("/{id}/default")
     public ResponseEntity<MessageResponse> setDefaultAddress(@PathVariable Long id) {
         addressService.setDefaultAddress(id);
         return ResponseEntity.ok(MessageResponse.builder()

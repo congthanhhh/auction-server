@@ -1,6 +1,7 @@
 package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.constants.InvoiceStatus;
+import com.thanh.auction_server.constants.InvoiceType;
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
@@ -27,8 +28,10 @@ public class InvoiceController {
     @GetMapping("/my-invoices")
     public ResponseEntity<PageResponse<InvoiceResponse>> getMyInvoices(
             @RequestParam(value = "page", defaultValue = "1") int page,
-            @RequestParam(value = "size", defaultValue = "10") int size) {
-        PageResponse<InvoiceResponse> response = invoiceService.getMyInvoices(page, size);
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "status", required = false) InvoiceStatus status,
+            @RequestParam(value = "type", required = false) InvoiceType type) {
+        PageResponse<InvoiceResponse> response = invoiceService.getMyInvoices(status, type, page, size);
         return ResponseEntity.ok(response);
     }
 

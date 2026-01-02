@@ -139,6 +139,29 @@ public class AuctionSessionService {
                 .build();
     }
 
+    public List<AuctionSessionResponse> getTopPopularSessions() {
+        Pageable limit = PageRequest.of(0, 5);
+        List<AuctionSession> topSessions = auctionSessionRepository.findTopPopularSessions(AuctionStatus.ACTIVE, limit);
+        return topSessions.stream()
+                .map(auctionSessionMapper::toAuctionSessionResponse)
+                .toList();
+    }
+
+    public PageResponse<AuctionSessionResponse> getMyJoinedSessions(AuctionStatus status, int page, int size) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<AuctionSession> sessionPage = auctionSessionRepository.findSessionsByBidder(username, status, pageable);
+        return PageResponse.<AuctionSessionResponse>builder()
+                .currentPage(page)
+                .totalPages(sessionPage.getTotalPages())
+                .pageSize(sessionPage.getSize())
+                .totalElements(sessionPage.getTotalElements())
+                .data((sessionPage.getContent().stream()
+                        .map(auctionSessionMapper::toAuctionSessionResponse)
+                        .toList()))
+                .build();
+    }
+
     public PageResponse<AuctionSessionResponse> getMyAuctionSessions(AuctionStatus status, int page, int size) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Pageable pageable = PageRequest.of(page - 1, size);

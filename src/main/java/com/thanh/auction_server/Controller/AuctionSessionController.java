@@ -14,6 +14,8 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/auction-sessions")
@@ -27,6 +29,15 @@ public class AuctionSessionController {
         return ResponseEntity.ok(auctionSessionService.createAuctionSession(request, httpRequest));
     }
 
+    @GetMapping("/my-joined")
+    public ResponseEntity<PageResponse<AuctionSessionResponse>> getMyJoinedSessions(
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "status", required = false) AuctionStatus status) {
+        PageResponse<AuctionSessionResponse> response = auctionSessionService.getMyJoinedSessions(status, page, size);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping
     public ResponseEntity<PageResponse<AuctionSessionResponse>> getAuctionSessions(
             @RequestParam(value = "status", required = false) AuctionStatus status,
@@ -34,6 +45,11 @@ public class AuctionSessionController {
             @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
         PageResponse<AuctionSessionResponse> response = auctionSessionService.getAllAuctionSessions(status, page, size);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/top-popular")
+    public ResponseEntity<List<AuctionSessionResponse>> getTopPopularSessions() {
+        return ResponseEntity.ok(auctionSessionService.getTopPopularSessions());
     }
 
     @GetMapping("/my-sessions")
