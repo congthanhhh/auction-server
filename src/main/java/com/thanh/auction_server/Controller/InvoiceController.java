@@ -3,10 +3,7 @@ package com.thanh.auction_server.Controller;
 import com.thanh.auction_server.constants.InvoiceStatus;
 import com.thanh.auction_server.constants.InvoiceType;
 import com.thanh.auction_server.dto.request.*;
-import com.thanh.auction_server.dto.response.InvoiceResponse;
-import com.thanh.auction_server.dto.response.MessageResponse;
-import com.thanh.auction_server.dto.response.PageResponse;
-import com.thanh.auction_server.dto.response.SellerRevenueResponse;
+import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.service.invoice.DashboardService;
 import com.thanh.auction_server.service.invoice.InvoiceService;
 import lombok.AccessLevel;
@@ -83,6 +80,11 @@ public class InvoiceController {
     @PostMapping("/{id}/confirm")
     public ResponseEntity<MessageResponse> confirmInvoice(@PathVariable Long id) {
         return ResponseEntity.ok(invoiceService.confirmInvoice(id));
+    }
+
+    @GetMapping("/dispute/{invoiceId}")
+    public ResponseEntity<DisputeResponse> getDisputeByInvoice(@PathVariable Long invoiceId) {
+        return ResponseEntity.ok(invoiceService.getDisputeByInvoiceId(invoiceId));
     }
 
     @PostMapping("/{id}/dispute")

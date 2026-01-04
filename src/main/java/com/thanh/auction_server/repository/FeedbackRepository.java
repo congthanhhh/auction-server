@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
     // Tìm danh sách feedback mà user này NHẬN được (để hiển thị trên profile)
@@ -14,4 +15,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
     boolean existsByInvoice_IdAndFromUser_Id(Long invoiceId, String fromUserId);
     // Đếm số lượng đánh giá
     long countByToUser_Id(String userId);
+
+    @Query("SELECT COUNT(f) > 0 FROM Feedback f WHERE f.invoice.id = :invoiceId AND f.fromUser.id = :userId")
+    boolean existsByInvoiceIdAndFromUserId(@Param("invoiceId") Long invoiceId, @Param("userId") String userId);
 }

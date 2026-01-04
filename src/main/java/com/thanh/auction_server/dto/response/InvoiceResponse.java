@@ -33,4 +33,5 @@ public class InvoiceResponse {
     String carrier;
     LocalDateTime shippedAt;
     LocalDateTime paymentTime;
+    Boolean hasFeedback;
 }

@@ -28,4 +28,5 @@ public class Dispute {
     @Column(columnDefinition = "TEXT")
     String adminNote;
     LocalDateTime createdAt;
+    LocalDateTime resolvedAt;
 }

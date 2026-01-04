@@ -7,6 +7,7 @@ import com.thanh.auction_server.constants.InvoiceType;
 import com.thanh.auction_server.dto.request.DisputeRequest;
 import com.thanh.auction_server.dto.request.ResolveDisputeRequest;
 import com.thanh.auction_server.dto.request.ShipInvoiceRequest;
+import com.thanh.auction_server.dto.response.DisputeResponse;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
@@ -14,6 +15,8 @@ import com.thanh.auction_server.entity.*;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
+import com.thanh.auction_server.exception.UserNotFoundException;
+import com.thanh.auction_server.mapper.DisputeMapper;
 import com.thanh.auction_server.mapper.InvoiceMapper;
 import com.thanh.auction_server.repository.DisputeRepository;
 import com.thanh.auction_server.repository.FeedbackRepository;
@@ -47,6 +50,7 @@ public class InvoiceService {
     UserRepository userRepository;
     FeedbackRepository feedbackRepository;
     InvoiceMapper invoiceMapper;
+    DisputeMapper disputeMapper;
     UserService userService;
     PaymentService paymentService;
     NotificationService notificationService;
@@ -80,17 +84,24 @@ public class InvoiceService {
 
     public PageResponse<InvoiceResponse> getMyInvoices(InvoiceStatus status, InvoiceType type, int page, int size) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
         Pageable pageable = PageRequest.of(page - 1, size);
         Page<Invoice> invoicePage = invoiceRepository.findByUserUsernameAndStatusAndType(username, status, type, pageable);
+        List<InvoiceResponse> responses = invoicePage.getContent().stream().map(invoice -> {
+            InvoiceResponse response = invoiceMapper.toInvoiceResponse(invoice);
+        // check has been feedback
+            boolean hasFeedback = feedbackRepository.existsByInvoiceIdAndFromUserId(invoice.getId(), currentUser.getId());
+            response.setHasFeedback(hasFeedback);
+            return response;
+        }).toList();
 
         return PageResponse.<InvoiceResponse>builder()
                 .currentPage(page)
                 .totalPages(invoicePage.getTotalPages())
                 .pageSize(invoicePage.getSize())
                 .totalElements(invoicePage.getTotalElements())
-                .data(invoicePage.getContent().stream()
-                        .map(invoiceMapper::toInvoiceResponse)
-                        .toList())
+                .data(responses)
                 .build();
     }
 
@@ -127,31 +138,21 @@ public class InvoiceService {
     @Transactional
     public MessageResponse reportNonPayment(Long invoiceId) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-
-        // 1. Tìm hóa đơn
         Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn với ID: " + invoiceId));
-
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
         User seller = invoice.getProduct().getSeller();
         User buyer = invoice.getUser();
-
-        // 2. Kiểm tra bảo mật: Chỉ người bán mới có quyền báo cáo
+        // Chỉ người bán mới có quyền báo cáo
         if (!seller.getUsername().equals(currentUsername)) {
-            log.warn("User '{}' cố gắng báo cáo hóa đơn ID {} không thuộc sở hữu của họ.", currentUsername, invoiceId);
-            throw new UnauthorizedException("Bạn không có quyền thực hiện hành động này.");
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
         }
-
-        // 3. Kiểm tra logic nghiệp vụ
         if (invoice.getStatus() != InvoiceStatus.PENDING) {
-            throw new DataConflictException("Chỉ có thể báo cáo hóa đơn đang chờ thanh toán.");
+            throw new DataConflictException(ErrorMessage.STATUS_INCORRECT + invoice.getStatus());
         }
-
-        // 4. Kiểm tra hạn chót thanh toán (dueDate)
+        //Kiểm tra hạn chót thanh toán (dueDate)
         if (invoice.getDueDate().isAfter(LocalDateTime.now())) {
             throw new DataConflictException("Bạn chỉ có thể báo cáo sau khi đã quá hạn thanh toán.");
         }
-
-        // 5. THỰC THI HÀNH ĐỘNG
         invoice.setStatus(InvoiceStatus.CANCELLED_NON_PAYMENT);
         invoiceRepository.save(invoice);
         userService.incrementStrikeCount(buyer.getId());
@@ -335,11 +336,31 @@ public class InvoiceService {
 
         // Cập nhật trạng thái Dispute
         dispute.setAdminNote(request.getAdminNote());
+        dispute.setResolvedAt(LocalDateTime.now());
         disputeRepository.save(dispute);
 
         return MessageResponse.builder()
                 .message("Đã giải quyết khiếu nại thành công.")
                 .build();
+    }
+
+    public DisputeResponse getDisputeByInvoiceId(Long invoiceId) {
+        Dispute dispute = disputeRepository.findByInvoiceId(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dispute not found for Invoice ID: " + invoiceId));
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
+
+        String buyerUsername = dispute.getInvoice().getUser().getUsername();
+        String sellerUsername = dispute.getInvoice().getProduct().getSeller().getUsername();
+        boolean isBuyer = username.equals(buyerUsername);
+        boolean isSeller = username.equals(sellerUsername);
+        // Kiểm tra vai trò ADMIN co the them cacs role khacs
+        boolean isAdmin = currentUser.getRoles().stream().anyMatch(r -> r.getName().equals("ADMIN"));
+        if (!isBuyer && !isSeller && !isAdmin) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
+        }
+        return disputeMapper.toDisputeResponse(dispute);
     }
 
     private PageResponse<InvoiceResponse> getInvoicesForSeller(InvoiceStatus status, InvoiceType type, int page, int size) {

@@ -17,6 +17,7 @@ import java.util.Set;
 public class SimpleProductResponse {
     Long id;
     String name;
+    SimpleUserResponse seller;
     BigDecimal startPrice;
     Set<Image> images;
 }

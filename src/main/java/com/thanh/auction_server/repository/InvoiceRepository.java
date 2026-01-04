@@ -62,4 +62,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             @Param("status") InvoiceStatus status,
             @Param("type") InvoiceType type,
             Pageable pageable);
+
+
 }
