@@ -250,13 +250,11 @@ public class UserService {
         // notificationService.createNotification(user, "Bạn đã nhận 1 điểm phạt do không thanh toán.", "/my-strikes");
     }
 
-//    public UserProfileResponse getMyProfile() {
-//        var context = SecurityContextHolder.getContext();
-//        String currentUsername = context.getAuthentication().getName();
-//        User user = userRepository.findByUsername(currentUsername)
-//                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
-//        return userMapper.toUserProfileResponse(user);
-//    }
+    public PublicUserProfileResponse getPublicProfile(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + userId));
+        return userMapper.toPublicUserProfileResponse(user);
+    }
 
     public UserProfileResponse getMyProfile() {
         var context = SecurityContextHolder.getContext();

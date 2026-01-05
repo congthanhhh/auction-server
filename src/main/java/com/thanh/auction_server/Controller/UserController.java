@@ -1,10 +1,7 @@
 package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.dto.request.*;
-import com.thanh.auction_server.dto.response.MessageResponse;
-import com.thanh.auction_server.dto.response.PageResponse;
-import com.thanh.auction_server.dto.response.UserProfileResponse;
-import com.thanh.auction_server.dto.response.UserResponse;
+import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.service.authenticate.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +87,12 @@ public class UserController {
     @GetMapping("/my-profile")
     public ResponseEntity<UserProfileResponse> getPublicProfile() {
         return ResponseEntity.ok(userService.getMyProfile());
+    }
+
+    @GetMapping("/{userId}/public-profile")
+    public ResponseEntity<PublicUserProfileResponse> getPublicProfile(@PathVariable String userId) {
+        var user = userService.getPublicProfile(userId);
+        return ResponseEntity.ok(user);
     }
 
 }

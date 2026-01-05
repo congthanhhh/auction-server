@@ -38,6 +38,14 @@ public class AuctionSessionController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/seller/{sellerId}/active")
+    public ResponseEntity<PageResponse<AuctionSessionResponse>> getSellerActiveSessions(
+            @PathVariable String sellerId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(auctionSessionService.getActiveSessionsBySeller(sellerId, page, size));
+    }
+
     @GetMapping
     public ResponseEntity<PageResponse<AuctionSessionResponse>> getAuctionSessions(
             @RequestParam(value = "status", required = false) AuctionStatus status,

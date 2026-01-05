@@ -68,5 +68,9 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
             @Param("status") AuctionStatus status,
             Pageable pageable);
 
-
+    @Query("SELECT a FROM AuctionSession a " +
+            "WHERE a.product.seller.id = :sellerId " +
+            "AND a.status = 'ACTIVE' " +
+            "ORDER BY a.endTime ASC")
+    Page<AuctionSession> findActiveSessionsBySeller(@Param("sellerId") String sellerId, Pageable pageable);
 }

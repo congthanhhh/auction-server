@@ -4,7 +4,9 @@ import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.constants.FeedbackRating;
 import com.thanh.auction_server.constants.InvoiceStatus;
 import com.thanh.auction_server.dto.request.FeedbackRequest;
+import com.thanh.auction_server.dto.response.FeedbackDto;
 import com.thanh.auction_server.dto.response.MessageResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.Feedback;
 import com.thanh.auction_server.entity.Invoice;
 import com.thanh.auction_server.entity.User;
@@ -12,6 +14,7 @@ import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.exception.UserNotFoundException;
+import com.thanh.auction_server.mapper.FeedbackMapper;
 import com.thanh.auction_server.repository.FeedbackRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.UserRepository;
@@ -19,11 +22,15 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -33,6 +40,7 @@ public class FeedbackService {
     FeedbackRepository feedbackRepository;
     InvoiceRepository invoiceRepository;
     UserRepository userRepository;
+    FeedbackMapper feedbackMapper;
 
     @Transactional
     public MessageResponse createFeedback(Long invoiceId, FeedbackRequest request) {
@@ -117,5 +125,31 @@ public class FeedbackService {
         User currentUser = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
         return feedbackRepository.countByToUser_Id(currentUser.getId());
+    }
+
+    public PageResponse<FeedbackDto> getFeedbackList(String toUserId, int page, int size) {
+        // Sắp xếp feedback mới nhất lên đầu
+        Pageable pageable = PageRequest.of(page - 1, size);
+
+        Page<Feedback> feedbackPage = feedbackRepository.findByToUser_IdOrderByCreatedAtDesc(toUserId, pageable);
+
+        List<FeedbackDto> dtos = feedbackPage.getContent().stream().map(feedback -> {
+            FeedbackDto dto = feedbackMapper.toFeedbackDto(feedback);
+            String buyerId = feedback.getInvoice().getUser().getId();
+            if (toUserId.equals(buyerId)) {
+                dto.setReviewAs("BUYER");
+            } else {
+                dto.setReviewAs("SELLER");
+            }
+            return dto;
+        }).toList();
+
+        return PageResponse.<FeedbackDto>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(feedbackPage.getTotalPages())
+                .totalElements(feedbackPage.getTotalElements())
+                .data(dtos)
+                .build();
     }
 }

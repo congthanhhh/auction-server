@@ -10,8 +10,9 @@ import java.time.LocalDateTime;
 public class FeedbackDto {
     Long id;
     String fromUsername;
+    String toUsername;
     FeedbackRating rating;
     String comment;
     LocalDateTime createdAt;
-    String productName;
+    String reviewAs;
 }

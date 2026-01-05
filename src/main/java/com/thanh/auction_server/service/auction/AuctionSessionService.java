@@ -207,6 +207,20 @@ public class AuctionSessionService {
                 .build();
     }
 
+    public PageResponse<AuctionSessionResponse> getActiveSessionsBySeller(String sellerId, int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<AuctionSession> pageData = auctionSessionRepository.findActiveSessionsBySeller(sellerId, pageable);
+        return PageResponse.<AuctionSessionResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(pageData.getTotalPages())
+                .totalElements(pageData.getTotalElements())
+                .data(pageData.getContent().stream()
+                        .map(auctionSessionMapper::toAuctionSessionResponse)
+                        .toList())
+                .build();
+    }
+
     // Lấy chi tiết một phiên đấu giá
     public AuctionSessionResponse getAuctionSessionById(Long id) {
         log.info("Fetching auction session with ID: {}", id);

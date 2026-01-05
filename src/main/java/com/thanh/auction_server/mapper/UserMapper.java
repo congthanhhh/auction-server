@@ -2,10 +2,7 @@ package com.thanh.auction_server.mapper;
 
 import com.thanh.auction_server.dto.request.UserCreationRequest;
 import com.thanh.auction_server.dto.request.UserUpdateRequest;
-import com.thanh.auction_server.dto.response.SimpleProductResponse;
-import com.thanh.auction_server.dto.response.SimpleUserResponse;
-import com.thanh.auction_server.dto.response.UserProfileResponse;
-import com.thanh.auction_server.dto.response.UserResponse;
+import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.entity.Product;
 import com.thanh.auction_server.entity.User;
 import org.mapstruct.Mapper;
@@ -27,4 +24,6 @@ public interface UserMapper {
     SimpleUserResponse userToSimpleUserResponse(User user);
 
     UserProfileResponse toUserProfileResponse(User user);
+
+    PublicUserProfileResponse toPublicUserProfileResponse(User user);
 }
