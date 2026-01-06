@@ -1,5 +1,6 @@
 package com.thanh.auction_server.dto.response;
 
+import com.thanh.auction_server.constants.DisputeDecision;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
     Long id;
     Long invoiceId;
     String reason;
+    DisputeDecision decision;
     String adminNote;
     LocalDateTime createdAt;
     LocalDateTime resolvedAt;

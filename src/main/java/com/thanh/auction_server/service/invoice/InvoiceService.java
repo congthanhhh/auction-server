@@ -1,10 +1,8 @@
 package com.thanh.auction_server.service.invoice;
 
-import com.thanh.auction_server.constants.ErrorMessage;
-import com.thanh.auction_server.constants.FeedbackRating;
-import com.thanh.auction_server.constants.InvoiceStatus;
-import com.thanh.auction_server.constants.InvoiceType;
+import com.thanh.auction_server.constants.*;
 import com.thanh.auction_server.dto.request.DisputeRequest;
+import com.thanh.auction_server.dto.request.DisputeSearchRequest;
 import com.thanh.auction_server.dto.request.ResolveDisputeRequest;
 import com.thanh.auction_server.dto.request.ShipInvoiceRequest;
 import com.thanh.auction_server.dto.response.DisputeResponse;
@@ -25,6 +23,7 @@ import com.thanh.auction_server.repository.UserRepository;
 import com.thanh.auction_server.service.auction.NotificationService;
 import com.thanh.auction_server.service.authenticate.UserService;
 import com.thanh.auction_server.service.payment.PaymentService;
+import com.thanh.auction_server.specification.DisputeSpecification;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -32,6 +31,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -128,7 +129,6 @@ public class InvoiceService {
         boolean isSeller = invoice.getProduct().getSeller().getUsername().equals(username);
 
         if (!isBuyer && !isSeller) {
-            log.warn("User '{}' cố gắng truy cập hóa đơn ID {} mà không có quyền", username, id);
             throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED);
         }
 
@@ -293,6 +293,25 @@ public class InvoiceService {
         invoiceRepository.saveAll(invoices);
     }
 
+    private PageResponse<InvoiceResponse> getInvoicesForSeller(InvoiceStatus status, InvoiceType type, int page, int size) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<Invoice> invoicePage = invoiceRepository.findBySellerUsernameStatusAndType(username, status, type, pageable);
+
+        List<InvoiceResponse> responses = invoicePage.getContent()
+                .stream()
+                .map(invoiceMapper::toInvoiceResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.<InvoiceResponse>builder()
+                .currentPage(page)
+                .totalPages(invoicePage.getTotalPages())
+                .pageSize(invoicePage.getSize())
+                .totalElements(invoicePage.getTotalElements())
+                .data(responses)
+                .build();
+    }
+    //========================Díspute Section========================//
     @Transactional
     public MessageResponse resolveDispute(Long disputeId, ResolveDisputeRequest request) {
         Dispute dispute = disputeRepository.findById(disputeId)
@@ -302,10 +321,11 @@ public class InvoiceService {
             throw new DataConflictException("Hóa đơn này không trong trạng thái tranh chấp.");
         }
         // Xử lý theo quyết định của Admin
-        if (request.getDecision() == ResolveDisputeRequest.DisputeDecision.REFUND_TO_BUYER) {
+        if (request.getDecision() == DisputeDecision.REFUND_TO_BUYER) {
             // A. BUYER THẮNG
             log.info("Bắt đầu quy trình hoàn tiền cho Invoice ID: {}", invoice.getId());
             invoice.setStatus(InvoiceStatus.REFUNDED);
+            dispute.setDecision(DisputeDecision.REFUND_TO_BUYER);
             try {
                 paymentService.refundTransaction(invoice.getId());
                 log.info("Gọi API hoàn tiền thành công");
@@ -323,7 +343,7 @@ public class InvoiceService {
         } else {
             // B. SELLER THẮNG
             invoice.setStatus(InvoiceStatus.COMPLETED);
-
+            dispute.setDecision(DisputeDecision.RELEASE_TO_SELLER);
             notificationService.createNotification(invoice.getUser(),
                     "Khiếu nại đơn hàng " + invoice.getProduct().getName() + " bị từ chối. Giao dịch hoàn tất.",
                     "/invoices/" + invoice.getId());
@@ -341,6 +361,41 @@ public class InvoiceService {
 
         return MessageResponse.builder()
                 .message("Đã giải quyết khiếu nại thành công.")
+                .build();
+    }
+
+    public PageResponse<DisputeResponse> getAllDisputes(DisputeSearchRequest request, int page, int size) {
+        Sort sortObj = Sort.by("createdAt").descending();
+        if (request.getSort() != null) {
+            sortObj = switch (request.getSort().toLowerCase()) {
+                case "oldest" -> Sort.by("createdAt").ascending();
+                case "resolved_newest" -> Sort.by("resolvedAt").descending();
+                case "resolved_oldest" -> Sort.by("resolvedAt").ascending();
+                default -> Sort.by("createdAt").descending();
+            };
+        }
+        Pageable pageable = PageRequest.of(page - 1, size, sortObj);
+
+        Specification<Dispute> spec = DisputeSpecification.getFilter(request);
+        Page<Dispute> disputePage = disputeRepository.findAll(spec, pageable);
+
+        List<DisputeResponse> responses = disputePage.getContent().stream().map(dispute -> {
+            return DisputeResponse.builder()
+                    .id(dispute.getId())
+                    .invoiceId(dispute.getInvoice().getId())
+                    .reason(dispute.getReason())
+                    .adminNote(dispute.getAdminNote())
+                    .createdAt(dispute.getCreatedAt())
+                    .resolvedAt(dispute.getResolvedAt())
+                    .decision(dispute.getDecision())
+                    .build();
+        }).toList();
+        return PageResponse.<DisputeResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(disputePage.getTotalPages())
+                .totalElements(disputePage.getTotalElements())
+                .data(responses)
                 .build();
     }
 
@@ -363,22 +418,9 @@ public class InvoiceService {
         return disputeMapper.toDisputeResponse(dispute);
     }
 
-    private PageResponse<InvoiceResponse> getInvoicesForSeller(InvoiceStatus status, InvoiceType type, int page, int size) {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        Pageable pageable = PageRequest.of(page - 1, size);
-        Page<Invoice> invoicePage = invoiceRepository.findBySellerUsernameStatusAndType(username, status, type, pageable);
-
-        List<InvoiceResponse> responses = invoicePage.getContent()
-                .stream()
-                .map(invoiceMapper::toInvoiceResponse)
-                .collect(Collectors.toList());
-
-        return PageResponse.<InvoiceResponse>builder()
-                .currentPage(page)
-                .totalPages(invoicePage.getTotalPages())
-                .pageSize(invoicePage.getSize())
-                .totalElements(invoicePage.getTotalElements())
-                .data(responses)
-                .build();
+    public InvoiceResponse adminGetInvoiceById(Long invoiceId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
+        return invoiceMapper.toInvoiceResponse(invoice);
     }
 }

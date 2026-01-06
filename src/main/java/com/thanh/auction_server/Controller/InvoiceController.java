@@ -87,6 +87,11 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.getDisputeByInvoiceId(invoiceId));
     }
 
+    @GetMapping("/seller-stats")
+    public ResponseEntity<SellerRevenueResponse> getSellerStats() {
+        return ResponseEntity.ok(dashboardService.getSellerDashboard());
+    }
+
     @PostMapping("/{id}/dispute")
     public ResponseEntity<MessageResponse> reportDispute(
             @PathVariable Long id,
@@ -94,15 +99,23 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.reportDispute(id, request));
     }
 
-    @PostMapping("/disputes/{id}/resolve")
+    @GetMapping("/admin/invoice/{invoiceId}")
+    public ResponseEntity<InvoiceResponse> getInvoiceByIdForAdmin(@PathVariable Long invoiceId) {
+        InvoiceResponse response = invoiceService.adminGetInvoiceById(invoiceId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/admin/disputes/{id}/resolve")
     public ResponseEntity<MessageResponse> resolveDispute(
             @PathVariable Long id,
             @RequestBody ResolveDisputeRequest request) {
         return ResponseEntity.ok(invoiceService.resolveDispute(id, request));
     }
-
-    @GetMapping("/seller-stats")
-    public ResponseEntity<SellerRevenueResponse> getSellerStats() {
-        return ResponseEntity.ok(dashboardService.getSellerDashboard());
+    @GetMapping("/admin/disputes")
+    public ResponseEntity<PageResponse<DisputeResponse>> getDisputes(
+            @ModelAttribute DisputeSearchRequest request,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(invoiceService.getAllDisputes(request, page, size));
     }
 }

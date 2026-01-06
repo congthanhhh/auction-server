@@ -1,5 +1,6 @@
 package com.thanh.auction_server.entity;
 
+import com.thanh.auction_server.constants.DisputeDecision;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -24,7 +25,8 @@ public class Dispute {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     String reason;
-
+    @Enumerated(EnumType.STRING)
+    DisputeDecision decision = DisputeDecision.PENDING;
     @Column(columnDefinition = "TEXT")
     String adminNote;
     LocalDateTime createdAt;

@@ -191,7 +191,7 @@ public class ProductService {
     }
 
     public void enableProduct(Long id) {
-        var product = productRepository.findByIdAndIsActiveTrue(id)
+        var product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
         product.setIsActive(true);
         productRepository.save(product);

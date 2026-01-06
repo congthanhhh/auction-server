@@ -28,5 +28,6 @@ public class ProductResponse {
     SimpleUserResponse seller;
     ProductStatus status;
     String attributes;
+    Boolean isActive;
     Set<Image> images;
 }
