@@ -1,5 +1,6 @@
 package com.thanh.auction_server.entity;
 
+import com.thanh.auction_server.constants.ProductStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -51,4 +52,8 @@ public class Product {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     Set<Image> images;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    ProductStatus status;
 }

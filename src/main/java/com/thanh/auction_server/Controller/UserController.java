@@ -3,10 +3,12 @@ package com.thanh.auction_server.Controller;
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.service.authenticate.UserService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,11 +40,6 @@ public class UserController {
     @PutMapping("/{id}")
     ResponseEntity<UserResponse> updateUser(@PathVariable String id, @RequestBody UserUpdateRequest request) {
         return ResponseEntity.ok(userService.updateUser(id, request));
-    }
-
-    @PatchMapping("/{id}/active-status")
-    ResponseEntity<String> updateUserActiveStatus(@PathVariable String id, @RequestBody Boolean isActive) {
-        return ResponseEntity.ok(userService.updateUserStatus(id, isActive));
     }
 
     @GetMapping("/{id}")
@@ -93,6 +90,34 @@ public class UserController {
     public ResponseEntity<PublicUserProfileResponse> getPublicProfile(@PathVariable String userId) {
         var user = userService.getPublicProfile(userId);
         return ResponseEntity.ok(user);
+    }
+
+    @GetMapping("/admin/search")
+    public ResponseEntity<PageResponse<UserResponse>> getUsers(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) String role,
+            @RequestParam(defaultValue = "newest") String sort
+    ) {
+        return ResponseEntity.ok(userService.getUsers(isActive, role, page, size, sort));
+    }
+
+    @PatchMapping("/admin/{id}/active-status")
+    ResponseEntity<String> updateUserActiveStatus(@PathVariable String id, @RequestBody Boolean isActive) {
+        return ResponseEntity.ok(userService.updateUserStatus(id, isActive));
+    }
+
+    @PostMapping("/admin-create")
+    public ResponseEntity<UserResponse> createUserByAdmin(@RequestBody @Valid AdminCreationRequest request) {
+        return ResponseEntity.ok(userService.createUserByAdmin(request));
+    }
+
+    @PutMapping("/{userId}/admin-update")
+    public ResponseEntity<UserResponse> updateUserByAdmin(
+            @PathVariable String userId,
+            @RequestBody AdminUpdateRequest request) {
+        return ResponseEntity.ok(userService.updateUserByAdmin(userId, request));
     }
 
 }

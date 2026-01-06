@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -63,5 +64,25 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             @Param("type") InvoiceType type,
             Pageable pageable);
 
+    // Gia lap doanh thu
+    @Query("SELECT SUM(i.finalPrice) FROM Invoice i WHERE i.status = 'PAID' AND i.type = 'LISTING_FEE'")
+    BigDecimal sumTotalListingFee();
+    @Query("SELECT SUM(i.finalPrice) FROM Invoice i WHERE i.status = 'COMPLETED' AND i.type = 'AUCTION_SALE'")
+    BigDecimal sumTotalAuctionSales();
 
+    // 1. Tính tổng phí niêm yết trong khoảng thời gian (Listing Fee)
+    @Query("SELECT SUM(i.finalPrice) FROM Invoice i " +
+            "WHERE i.status = 'PAID' AND i.type = 'LISTING_FEE' " +
+            "AND (:startDate IS NULL OR i.createdAt >= :startDate) " +
+            "AND (:endDate IS NULL OR i.createdAt <= :endDate)")
+    BigDecimal sumListingFeeBetween(@Param("startDate") LocalDateTime startDate,
+                                    @Param("endDate") LocalDateTime endDate);
+
+    // 2. Tính tổng giá trị giao dịch trong khoảng thời gian (Auction Sales)
+    @Query("SELECT SUM(i.finalPrice) FROM Invoice i " +
+            "WHERE i.status = 'COMPLETED' AND i.type = 'AUCTION_SALE' " +
+            "AND (:startDate IS NULL OR i.createdAt >= :startDate) " +
+            "AND (:endDate IS NULL OR i.createdAt <= :endDate)")
+    BigDecimal sumAuctionSalesBetween(@Param("startDate") LocalDateTime startDate,
+                                      @Param("endDate") LocalDateTime endDate);
 }

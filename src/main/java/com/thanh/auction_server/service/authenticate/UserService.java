@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -119,7 +120,6 @@ public class UserService {
     @PreAuthorize("hasRole('ADMIN')")
 //    @PreAuthorize("hasAuthority('FULL_EDIT')") //Permission
     public List<UserResponse> getUsers() {
-        log.info("In method get Users");
         return userRepository.findAll().stream().map(user -> {
             var userResponse = userMapper.toUserResponse(user);
             userResponse.setNoPassword(!StringUtils.hasText(user.getPassword()));
@@ -264,6 +264,69 @@ public class UserService {
         var userResponse = userMapper.toUserProfileResponse(user);
         userResponse.setNoPassword(!StringUtils.hasText(user.getPassword()));
         return userResponse;
+    }
+    // ================Admin===========================
+    @PreAuthorize("hasRole('ADMIN')")
+    public PageResponse<UserResponse> getUsers(Boolean isActive, String roleName, int page, int size, String sortDir) {
+        Sort.Direction direction = Sort.Direction.DESC;
+        if ("asc".equalsIgnoreCase(sortDir) || "oldest".equalsIgnoreCase(sortDir)) {
+            direction = Sort.Direction.ASC;
+        }
+        Pageable pageable = PageRequest.of(page - 1, size, Sort.by(direction, "createdAt"));
+        Page<User> userPage = userRepository.searchUsers(isActive, roleName, pageable);
+
+        return PageResponse.<UserResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(userPage.getTotalPages())
+                .totalElements(userPage.getTotalElements())
+                .data(userPage.getContent().stream()
+                        .map(userMapper::toUserResponse)
+                        .toList())
+                .build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public UserResponse createUserByAdmin(AdminCreationRequest request) {
+        if (userRepository.existsByUsername(request.getUsername()))
+            throw new UserAlreadyExistsException(ErrorMessage.USER_ALREADY_EXIST);
+        if (userRepository.existsByEmail(request.getEmail()))
+            throw new UserAlreadyExistsException(ErrorMessage.EMAIL_ALREADY_EXIST);
+
+        User user = userMapper.toUserFromAdminCreate(request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        var roles = new HashSet<Role>();
+        if (request.getRoles() != null && !request.getRoles().isEmpty()) {
+            roles.addAll(roleRepository.findAllById(request.getRoles()));
+        } else {
+            roleRepository.findById(RoleEnum.USER.name()).ifPresent(roles::add);
+        }
+        user.setRoles(roles);
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        user.setStrikeCount(0);
+        user.setReputationScore(0);
+        user.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
+        return userMapper.toUserResponse(userRepository.save(user));
+    }
+    @PreAuthorize("hasRole('ADMIN')")
+    public UserResponse updateUserByAdmin(String userId, AdminUpdateRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
+        userMapper.updateUserFromAdminRequest(user, request);
+        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        if (request.getRoles() != null) {
+            var roles = new HashSet<Role>(roleRepository.findAllById(request.getRoles()));
+            user.setRoles(roles);
+        }
+        if (request.getStrikeCount() != null) user.setStrikeCount(request.getStrikeCount());
+        if (request.getReputationScore() != null) user.setReputationScore(request.getReputationScore());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        return userMapper.toUserResponse(userRepository.save(user));
     }
 
 }

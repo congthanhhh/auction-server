@@ -50,20 +50,46 @@ public class ProductController {
         return ResponseEntity.ok(product);
     }
 
-
     @GetMapping("/search")
     public ResponseEntity<PageResponse<ProductResponse>> searchProducts(
-            @ModelAttribute ProductSearchRequest request, // Tự động map query params vào DTO
+            @ModelAttribute ProductSearchRequest request,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        return ResponseEntity.ok(productService.searchProducts(request, page, size));
+        return ResponseEntity.ok(productService.getAllProductsUser(request, page, size));
     }
 
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
     }
-
+    @PatchMapping("/{id}/restore")
+    public ResponseEntity<Void> restoreProduct(@PathVariable Long id) {
+        productService.enableProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+    //===============Admin chức năng==================
+    @GetMapping("/admin/pending")
+    public ResponseEntity<PageResponse<ProductResponse>> getPendingProducts(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(productService.getPendingProducts(page, size));
+    }
+    // Duyệt hoặc từ chối
+    @PatchMapping("/admin/{id}/verify")
+    public ResponseEntity<String> verifyProduct(
+            @PathVariable Long id,
+            @RequestParam Boolean isApproved) {
+        productService.verifyProduct(id, isApproved);
+        return ResponseEntity.ok(isApproved ? "Đã duyệt sản phẩm" : "Đã từ chối sản phẩm");
+    }
+    @GetMapping("/admin/search")
+    public ResponseEntity<PageResponse<ProductResponse>> searchProductsAdmin(
+            @ModelAttribute ProductSearchRequest request,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(productService.getProductsForAdmin(request, page, size));
+    }
 }

@@ -1,9 +1,6 @@
 package com.thanh.auction_server.service.auction;
 
-import com.thanh.auction_server.constants.AuctionStatus;
-import com.thanh.auction_server.constants.ErrorMessage;
-import com.thanh.auction_server.constants.InvoiceStatus;
-import com.thanh.auction_server.constants.InvoiceType;
+import com.thanh.auction_server.constants.*;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
 import com.thanh.auction_server.dto.response.AuctionSessionResponse;
 import com.thanh.auction_server.dto.response.CreateAuctionSessionResponse;
@@ -67,6 +64,9 @@ public class AuctionSessionService {
         }
         if (request.getBuyNowPrice() != null && request.getBuyNowPrice().compareTo(request.getReservePrice()) <= 0) {
             throw new DataConflictException("Buy now price must be greater than or equal to reserve price.");
+        }
+        if (!ProductStatus.ACTIVE.equals(product.getStatus())) {
+            throw new DataConflictException("Sản phẩm chưa được duyệt hoặc bị từ chối. Vui lòng chờ Admin kiểm duyệt trước khi tạo phiên đấu giá.");
         }
         AuctionSession auctionSession = auctionSessionMapper.toAuctionSession(request);
         auctionSession.setProduct(product);

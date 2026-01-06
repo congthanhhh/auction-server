@@ -1,5 +1,6 @@
 package com.thanh.auction_server.dto.request;
 
+import com.thanh.auction_server.constants.ProductStatus;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -10,5 +11,9 @@ public class ProductSearchRequest {
     Long categoryId;
     BigDecimal minPrice;
     BigDecimal maxPrice;
-    // nhunwgx field khác
+    String sort;
+
+    ProductStatus status;
+    String sellerId;
+    Boolean isActive;
 }

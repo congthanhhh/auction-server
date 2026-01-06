@@ -29,31 +29,31 @@ public class ProductSpecification {
                 );
                 predicates.add(criteriaBuilder.or(namePredicate, descPredicate));
             }
-
-            // 2. Lọc theo CATEGORY
+            // Lọc theo CATEGORY
             if (request.getCategoryId() != null) {
-                // Giả sử Product có quan hệ @ManyToOne với Category tên là "category"
                 predicates.add(criteriaBuilder.equal(root.get("category").get("id"), request.getCategoryId()));
             }
 
-            // 3. Lọc theo KHOẢNG GIÁ (Starting Price)
+            // Lọc theo KHOẢNG GIÁ (Starting Price)
             if (request.getMinPrice() != null) {
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("startPrice"), request.getMinPrice()));
             }
             if (request.getMaxPrice() != null) {
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("startPrice"), request.getMaxPrice()));
             }
+            // Lọc theo SELLER (Cho Admin hoặc trang Profile của user)
+            if (StringUtils.hasText(request.getSellerId())) {
+                predicates.add(criteriaBuilder.equal(root.get("seller").get("id"), request.getSellerId()));
+            }
 
-            // 4. (QUAN TRỌNG) Chỉ lấy sản phẩm đang ACTIVE (Đang đấu giá)
-            // Logic này tùy thuộc vào DB của bạn.
-            // Nếu Product không có status mà phụ thuộc vào AuctionSession, bạn cần Join bảng.
-            // Dưới đây là ví dụ đơn giản nếu Product có field status hoặc isActive:
-            // predicates.add(criteriaBuilder.equal(root.get("isActive"), true));
-
-            // *NẾU* bạn muốn lọc dựa trên AuctionSession Status (ACTIVE):
-            // Join<Product, AuctionSession> sessionJoin = root.join("auctionSessions", JoinType.LEFT);
-            // predicates.add(criteriaBuilder.equal(sessionJoin.get("status"), AuctionStatus.ACTIVE));
-
+            // Lọc theo STATUS
+            if (request.getStatus() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), request.getStatus()));
+            }
+            // 6. Lọc theo isActive
+            if (request.getIsActive() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("isActive"), request.getIsActive()));
+            }
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
     }

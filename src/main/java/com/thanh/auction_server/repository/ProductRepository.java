@@ -1,5 +1,6 @@
 package com.thanh.auction_server.repository;
 
+import com.thanh.auction_server.constants.ProductStatus;
 import com.thanh.auction_server.entity.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,8 +21,13 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     List<Product> findAllBySeller_UsernameAndIsActiveTrue(String username);
 
-    // In ProductRepository.java
-    @Query("SELECT p FROM Product p WHERE p.seller.username = :username AND p.isActive = true AND p.id NOT IN (SELECT a.product.id FROM AuctionSession a)")
+    @Query("SELECT p FROM Product p WHERE p.seller.username = :username AND p.isActive = true " +
+            "AND p.id NOT IN (SELECT a.product.id FROM AuctionSession a)")
     List<Product> findAllBySeller_UsernameAndIsActiveTrueAndNotInAuctionSession(@Param("username") String username);
+
+    Page<Product> findByStatus(ProductStatus status, Pageable pageable);
+    Page<Product> findAllByIsActiveTrueAndStatus(ProductStatus status, Pageable pageable);
+
+    long countByStatus(ProductStatus status);
 
 }

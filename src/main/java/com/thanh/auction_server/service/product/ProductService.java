@@ -1,6 +1,7 @@
 package com.thanh.auction_server.service.product;
 
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.constants.ProductStatus;
 import com.thanh.auction_server.dto.request.ProductRequest;
 import com.thanh.auction_server.dto.request.ProductSearchRequest;
 import com.thanh.auction_server.dto.request.ProductUpdateRequest;
@@ -23,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -49,11 +51,9 @@ public class ProductService {
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
-
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         var seller = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
-
         var category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + request.getCategoryId()));
         var product = productMapper.toProduct(request);
@@ -61,6 +61,7 @@ public class ProductService {
         product.setCategory(category);
         product.setCreatedAt(LocalDateTime.now());
         product.setIsActive(true);
+        product.setStatus(ProductStatus.WAITING_FOR_APPROVAL);
         product.setImages(new HashSet<>());
         Set<Image> imagesToAssociate = new HashSet<>();
         if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
@@ -73,7 +74,6 @@ public class ProductService {
             imagesToAssociate.addAll(foundImages);
             product.getImages().addAll(imagesToAssociate);
         }
-
 
         var savedProduct = productRepository.save(product);
         return productMapper.toProductResponse(savedProduct);
@@ -123,7 +123,7 @@ public class ProductService {
 //    }
 
     @Transactional
-    public ProductResponse updateProduct(Long id, ProductUpdateRequest   request) {
+    public ProductResponse updateProduct(Long id, ProductUpdateRequest  request) {
         var existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
 
@@ -132,77 +132,54 @@ public class ProductService {
         if (!existingProduct.getSeller().getUsername().equals(currentUsername)) {
             throw new AccessDeniedException("Bạn không có quyền chỉnh sửa sản phẩm này.");
         }
-
         // Cập nhật Category nếu ID thay đổi
         if (!existingProduct.getCategory().getId().equals(request.getCategoryId())) {
-            log.debug("Category change detected for product ID {}. New category ID: {}", id, request.getCategoryId());
             var newCategory = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND+ request.getCategoryId()));
             existingProduct.setCategory(newCategory);
         }
-        // 5. Dùng mapper để cập nhật các trường cơ bản (name, description, price, attributes)
         // Mapper này KHÔNG cập nhật images, category, seller
         productMapper.updateProduct(existingProduct, request);
-
-        // 2. Xử lý Gỡ bỏ Ảnh (imageIdsToRemove)
+        // Xử lý Gỡ bỏ Ảnh (imageIdsToRemove)
         if (request.getImageIdsToRemove() != null && !request.getImageIdsToRemove().isEmpty()) {
-            log.debug("Processing images to remove: {}", request.getImageIdsToRemove());
             Set<Image> imagesCurrentlyAssociated = existingProduct.getImages();
-
             // Lọc ra các ảnh thực sự cần xóa khỏi collection
             List<Image> imagesToRemove = imagesCurrentlyAssociated.stream()
                     .filter(img -> request.getImageIdsToRemove().contains(img.getId()))
                     .toList();
-
             if (!imagesToRemove.isEmpty()) {
                 log.info("Removing {} images from product ID {}", imagesToRemove.size(), id);
                 imagesToRemove.forEach(imagesCurrentlyAssociated::remove); // Xóa khỏi collection
 //                imagesCurrentlyAssociated.removeAll(imagesToRemove);
 
-                // QUAN TRỌNG: Xóa ảnh khỏi Cloudinary và DB Image (nếu cần)
-                // Vì ảnh bị gỡ khỏi Product, nó có thể trở thành mồ côi
                 for (Image imgToRemove : imagesToRemove) {
                     try {
-                        // Gọi ImageService để xử lý xóa cả Cloudinary và DB
                         imageService.deleteImage(imgToRemove.getId());
                     } catch (Exception e) { // Bắt Exception chung
-                        // Ghi log lỗi nhưng vẫn tiếp tục cập nhật Product
                         log.error("Error deleting image ID {} during product update: {}", imgToRemove.getId(), e.getMessage());
                     }
                 }
             }
         }
-
-        // 3. Xử lý Thêm Ảnh Mới (imageIdsToAdd)
+        // Xử lý Thêm Ảnh Mới (imageIdsToAdd)
         if (request.getImageIdsToAdd() != null && !request.getImageIdsToAdd().isEmpty()) {
-            log.debug("Processing images to add: {}", request.getImageIdsToAdd());
-
             // Kiểm tra giới hạn số lượng ảnh (nếu đã implement)
             int currentImageCount = existingProduct.getImages().size();
             int imagesToAddCount = request.getImageIdsToAdd().size();
             // if (currentImageCount + imagesToAddCount > maxImageCount) {
             //     throw new UserNotFoundException("Thêm ảnh mới sẽ vượt quá giới hạn " + maxImageCount);
             // }
-
             List<Image> imagesToAdd = imageRepository.findAllById(request.getImageIdsToAdd());
             if (imagesToAdd.size() != request.getImageIdsToAdd().size()) {
                 log.warn("Some image IDs provided for addition were not found.");
-                // Quyết định: Ném lỗi hay chỉ thêm ảnh tìm thấy?
             }
-
             if (!imagesToAdd.isEmpty()) {
                 log.info("Adding {} new images to product ID {}", imagesToAdd.size(), id);
-                existingProduct.getImages().addAll(imagesToAdd); // Thêm vào collection
+                existingProduct.getImages().addAll(imagesToAdd);
             }
         }
-
-        // 4. Lưu Product cập nhật
-        // JPA sẽ tự động xử lý việc thêm/xóa các bản ghi liên kết (nếu dùng bảng trung gian)
-        // hoặc cập nhật khóa ngoại (nếu dùng @JoinColumn)
+        // Lưu sản phẩm đã cập nhật
         var updatedProduct = productRepository.save(existingProduct);
-        log.info("Product updated successfully with ID: {}", updatedProduct.getId());
-
-        // 5. Map và trả về Response
         return productMapper.toProductResponse(updatedProduct);
     }
 
@@ -211,20 +188,49 @@ public class ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
         product.setIsActive(false);
         productRepository.save(product);
-        log.info("Product with ID: {} has been deactivated", id);
     }
 
-    public PageResponse<ProductResponse> searchProducts(ProductSearchRequest  request, int page, int size) {
-        // 1. Tạo Pageable (có thể thêm sort ở đây nếu muốn)
-        Pageable pageable = PageRequest.of(page - 1, size);
+    public void enableProduct(Long id) {
+        var product = productRepository.findByIdAndIsActiveTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
+        product.setIsActive(true);
+        productRepository.save(product);
+    }
 
-        // 2. Lấy Specification từ Class util
+    // Hàm Search dành cho USER
+    public PageResponse<ProductResponse> getAllProductsUser(ProductSearchRequest request, int page, int size) {
+        request.setStatus(ProductStatus.ACTIVE);
+        request.setIsActive(true);
+        return executeSearch(request, page, size);
+    }
+
+    // Hàm Search dành cho ADMIN
+    public PageResponse<ProductResponse> getProductsForAdmin(ProductSearchRequest request, int page, int size) {
+        return executeSearch(request, page, size);
+    }
+
+    private PageResponse<ProductResponse> executeSearch(ProductSearchRequest request, int page, int size) {
+        Sort sortObj = Sort.by("createdAt").descending();
+        if (request.getSort() != null) {
+            switch (request.getSort().toLowerCase()) {
+                case "oldest":
+                    sortObj = Sort.by("createdAt").ascending();
+                    break;
+                case "price_asc":
+                    sortObj = Sort.by("startPrice").ascending();
+                    break;
+                case "price_desc":
+                    sortObj = Sort.by("startPrice").descending();
+                    break;
+                case "newest":
+                default:
+                    sortObj = Sort.by("createdAt").descending();
+                    break;
+            }
+        }
+        Pageable pageable = PageRequest.of(page - 1, size, sortObj);
         Specification<Product> spec = ProductSpecification.getFilter(request);
-
-        // 3. Gọi Repository (Hàm findAll này có sẵn nhờ JpaSpecificationExecutor)
         Page<Product> productPage = productRepository.findAll(spec, pageable);
-
-        // 4. Map sang Response
         List<ProductResponse> responses = productPage.getContent().stream()
                 .map(productMapper::toProductResponse)
                 .collect(Collectors.toList());
@@ -236,5 +242,30 @@ public class ProductService {
                 .totalElements(productPage.getTotalElements())
                 .data(responses)
                 .build();
+    }
+
+    // ---METHOD CHO ADMIN ---
+    public PageResponse<ProductResponse> getPendingProducts(int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<Product> pageData = productRepository.findByStatus(ProductStatus.WAITING_FOR_APPROVAL, pageable);
+
+        return PageResponse.<ProductResponse>builder()
+                .currentPage(page)
+                .totalPages(pageData.getTotalPages())
+                .pageSize(pageData.getSize())
+                .totalElements(pageData.getTotalElements())
+                .data(pageData.getContent().stream().map(productMapper::toProductResponse).toList())
+                .build();
+    }
+    public void verifyProduct(Long productId, boolean isApproved) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + productId));
+
+        if (isApproved) {
+            product.setStatus(ProductStatus.ACTIVE);
+        } else {
+            product.setStatus(ProductStatus.REJECTED);
+        }
+        productRepository.save(product);
     }
 }

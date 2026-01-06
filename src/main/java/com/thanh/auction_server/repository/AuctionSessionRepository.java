@@ -29,6 +29,8 @@ public interface AuctionSessionRepository extends JpaRepository<AuctionSession, 
 
     boolean existsByProduct_Id(Long productId);
 
+    long countByStatus(AuctionStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM AuctionSession a WHERE a.id = :id")
     Optional<AuctionSession> findByIdWithLock(@Param("id") Long id);
