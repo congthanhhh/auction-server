@@ -1,22 +1,27 @@
 package com.thanh.auction_server.service.auction;
 
 import com.thanh.auction_server.constants.*;
+import com.thanh.auction_server.dto.request.AdminUpdateSessionRequest;
+import com.thanh.auction_server.dto.request.AuctionSessionAdminSearchRequest;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
-import com.thanh.auction_server.dto.response.AuctionSessionResponse;
-import com.thanh.auction_server.dto.response.CreateAuctionSessionResponse;
-import com.thanh.auction_server.dto.response.PageResponse;
+import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.entity.AuctionSession;
 import com.thanh.auction_server.entity.Invoice;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.mapper.AuctionSessionMapper;
+import com.thanh.auction_server.mapper.InvoiceMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.ProductRepository;
+import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.service.admin.AuditLogService;
 import com.thanh.auction_server.service.admin.SystemParameterService;
 import com.thanh.auction_server.service.invoice.InvoiceService;
+import com.thanh.auction_server.service.payment.PaymentResponse;
 import com.thanh.auction_server.service.payment.PaymentService;
+import com.thanh.auction_server.specification.AuctionSpecification;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +30,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,11 +49,14 @@ public class AuctionSessionService {
     AuctionSessionRepository auctionSessionRepository;
     ProductRepository productRepository;
     AuctionSessionMapper auctionSessionMapper;
+    InvoiceMapper invoiceMapper;
     InvoiceRepository invoiceRepository;
+    UserRepository userRepository;
     NotificationService notificationService;
     InvoiceService invoiceService;
     PaymentService paymentService;
     SystemParameterService systemParameterService;
+    AuditLogService auditLogService;
 
     @Transactional
     public CreateAuctionSessionResponse createAuctionSession(AuctionSessionRequest request, HttpServletRequest httpRequest) {
@@ -121,6 +131,35 @@ public class AuctionSessionService {
                     .sessionDetails(auctionSessionMapper.toAuctionSessionResponse(auctionSession))
                     .build();
         }
+    }
+
+    @Transactional
+    public InvoiceResponse buyNow(Long sessionId) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
+
+        // Lấy Session (Có lock để tránh 2 người cùng Buy Now 1 lúc)
+        AuctionSession session = auctionSessionRepository.findByIdWithLock(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND + sessionId));
+
+        if (!AuctionStatus.ACTIVE.equals(session.getStatus())) {
+            throw new DataConflictException("Phiên đấu giá đã kết thúc hoặc chưa bắt đầu.");
+        }
+        if (session.getBuyNowPrice() == null || session.getBuyNowPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new DataConflictException("Sản phẩm này không hỗ trợ tính năng Mua ngay.");
+        }
+        if (session.getProduct().getSeller().getId().equals(currentUser.getId())) {
+            throw new DataConflictException("Bạn không thể mua sản phẩm của chính mình.");
+        }
+        session.setStatus(AuctionStatus.ENDED);
+        session.setEndTime(LocalDateTime.now());
+        session.setCurrentPrice(session.getBuyNowPrice());
+        session.setHighestBidder(currentUser);
+        session.setHighestMaxBid(session.getBuyNowPrice());
+        auctionSessionRepository.save(session);
+        Invoice invoice = invoiceService.createInvoiceForBuyNow(session, currentUser);
+        return invoiceMapper.toInvoiceResponse(invoice);
     }
 
     public PageResponse<AuctionSessionResponse> getAllAuctionSessions(AuctionStatus status, int page, int size) {
@@ -307,6 +346,88 @@ public class AuctionSessionService {
 
         }
         return sessionsToEnd;
+    }
+
+    //================= ADMIN METHODS =====================
+    @PreAuthorize("hasRole('ADMIN')")
+    public PageResponse<AdminAuctionSessionResponse> getAllAuctionSessionsForAdmin(AuctionSessionAdminSearchRequest request, int page, int size) {
+        Sort sort = Sort.by("createdAt").descending();
+        if (request.getSort() != null) {
+            sort = switch (request.getSort().toLowerCase()) {
+                case "oldest" -> Sort.by("createdAt").ascending();
+                case "price_asc" -> Sort.by("currentPrice").ascending();
+                case "price_desc" -> Sort.by("currentPrice").descending();
+                case "start_price_asc" -> Sort.by("startPrice").ascending();
+                case "start_price_desc" -> Sort.by("startPrice").descending();
+                case "reserve_price_asc" -> Sort.by("reservePrice").ascending();
+                case "reserve_price_desc" -> Sort.by("reservePrice").descending();
+                default -> Sort.by("createdAt").descending();
+            };
+        }
+        Pageable pageable = PageRequest.of(page - 1, size, sort);
+        var spec = AuctionSpecification.getFilter(request);
+        Page<AuctionSession> sessionPage = auctionSessionRepository.findAll(spec, pageable);
+        return PageResponse.<AdminAuctionSessionResponse>builder()
+                .currentPage(page)
+                .totalPages(sessionPage.getTotalPages())
+                .pageSize(sessionPage.getSize())
+                .totalElements(sessionPage.getTotalElements())
+                .data(sessionPage.getContent().stream()
+                        .map(auctionSessionMapper::toAdminAuctionSessionResponse)
+                        .toList())
+                .build();
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public AdminAuctionSessionResponse updateAuctionSessionForAdmin(Long id, AdminUpdateSessionRequest request) {
+        AuctionSession session = auctionSessionRepository.findByIdWithLock(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND + id));
+        boolean hasBids = session.getBids() != null && !session.getBids().isEmpty();
+        if (request.getStartTime() != null) {
+            if (hasBids && !request.getStartTime().isEqual(session.getStartTime())) {
+                throw new DataConflictException("Không thể thay đổi thời gian bắt đầu khi phiên đấu giá đã có người tham gia.");
+            }
+            session.setStartTime(request.getStartTime());
+        }
+        if (request.getEndTime() != null) {
+            session.setEndTime(request.getEndTime());
+        }
+        if (session.getEndTime().isBefore(session.getStartTime()) || session.getEndTime().isEqual(session.getStartTime())) {
+            throw new DataConflictException("Thời gian kết thúc phải sau thời gian bắt đầu.");
+        }
+        if (request.getStartPrice() != null) {
+            if (hasBids && request.getStartPrice().compareTo(session.getStartPrice()) != 0) {
+                throw new DataConflictException("Không thể thay đổi giá khởi điểm khi đã có người đặt giá.");
+            }
+            if (!hasBids) {
+                session.setStartPrice(request.getStartPrice());
+                session.setCurrentPrice(request.getStartPrice());
+            }
+        }
+        if (request.getReservePrice() != null) {
+            session.setReservePrice(request.getReservePrice());
+        }
+        if (request.getBuyNowPrice() != null) {
+            session.setBuyNowPrice(request.getBuyNowPrice());
+        }
+        // Validate logic logic giá: BuyNow >= Reserve & Current
+        if (session.getBuyNowPrice() != null) {
+            if (session.getReservePrice() != null && session.getBuyNowPrice().compareTo(session.getReservePrice()) < 0) {
+                throw new DataConflictException("Giá mua ngay phải lớn hơn hoặc bằng giá sàn.");
+            }
+            if (session.getBuyNowPrice().compareTo(session.getCurrentPrice()) <= 0) {
+                throw new DataConflictException("Giá mua ngay phải cao hơn giá hiện tại.");
+            }
+        }
+        if (request.getStatus() != null) {
+            session.setStatus(request.getStatus());
+        }
+
+        session.setUpdatedAt(LocalDateTime.now());
+        AuctionSession savedSession = auctionSessionRepository.save(session);
+        auditLogService.saveLog(LogAction.UPDATE_AUCTION, id.toString(), "Updated auction session by Admin.");
+        return auctionSessionMapper.toAdminAuctionSessionResponse(savedSession);
     }
 
 }

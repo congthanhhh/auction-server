@@ -118,4 +118,22 @@ public class InvoiceController {
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(invoiceService.getAllDisputes(request, page, size));
     }
+
+    @PutMapping("/admin/update/{id}")
+    public ResponseEntity<InvoiceResponse> updateInvoiceForAdmin(
+            @PathVariable Long id,
+            @RequestBody AdminUpdateInvoiceRequest request
+    ) {
+        return ResponseEntity.ok(invoiceService.updateInvoiceForAdmin(id, request));
+    }
+
+    @GetMapping("/admin/search")
+    public ResponseEntity<PageResponse<InvoiceResponse>> getAllInvoicesForAdmin(
+            @ModelAttribute InvoiceAdminSearchRequest request,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(invoiceService.getAllInvoicesForAdmin(request, page, size));
+    }
+
 }

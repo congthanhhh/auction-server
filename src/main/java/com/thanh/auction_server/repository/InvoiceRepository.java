@@ -6,6 +6,7 @@ import com.thanh.auction_server.entity.Invoice;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,7 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
+public interface InvoiceRepository extends JpaRepository<Invoice, Long>, JpaSpecificationExecutor<Invoice> {
 
     // Tìm các hóa đơn quá hạn để xử lý "bùng hàng"
     List<Invoice> findByStatusAndDueDateBefore(InvoiceStatus status, LocalDateTime now);

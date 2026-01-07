@@ -1,6 +1,7 @@
 package com.thanh.auction_server.mapper;
 
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
+import com.thanh.auction_server.dto.response.AdminAuctionSessionResponse;
 import com.thanh.auction_server.dto.response.AuctionSessionResponse;
 import com.thanh.auction_server.dto.response.SimpleProductResponse;
 import com.thanh.auction_server.dto.response.SimpleUserResponse;
@@ -33,6 +34,9 @@ public interface AuctionSessionMapper {
     @Mapping(target = "myMaxBid", expression = "java(calculateMyMaxBid(auctionSession))")
     AuctionSessionResponse toAuctionSessionResponse(AuctionSession auctionSession);
 
+    @Mapping(source = "product", target = "product")
+    @Mapping(source = "highestBidder", target = "highestBidder", qualifiedByName = "userToSimpleUserResponse")
+    AdminAuctionSessionResponse toAdminAuctionSessionResponse(AuctionSession auctionSession);
 
     // Map để cập nhật (ít dùng cho session, chủ yếu là cập nhật status, price)
     // void updateAuctionSession(@MappingTarget AuctionSession session, AuctionSessionRequest request);

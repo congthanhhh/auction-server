@@ -1,10 +1,7 @@
 package com.thanh.auction_server.service.invoice;
 
 import com.thanh.auction_server.constants.*;
-import com.thanh.auction_server.dto.request.DisputeRequest;
-import com.thanh.auction_server.dto.request.DisputeSearchRequest;
-import com.thanh.auction_server.dto.request.ResolveDisputeRequest;
-import com.thanh.auction_server.dto.request.ShipInvoiceRequest;
+import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.DisputeResponse;
 import com.thanh.auction_server.dto.response.InvoiceResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
@@ -26,6 +23,7 @@ import com.thanh.auction_server.service.auction.NotificationService;
 import com.thanh.auction_server.service.authenticate.UserService;
 import com.thanh.auction_server.service.payment.PaymentService;
 import com.thanh.auction_server.specification.DisputeSpecification;
+import com.thanh.auction_server.specification.InvoiceSpecification;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -35,6 +33,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +85,23 @@ public class InvoiceService {
         invoiceRepository.save(invoice);
         log.info("Invoice created (ID: {}) cho người thắng {} của phiên {}", invoice.getId(), winner.getUsername(), session.getId());
 
+    }
+
+    @Transactional
+    public Invoice createInvoiceForBuyNow(AuctionSession session, User winner) {
+        int dueDays = systemParameterService.getIntConfig(SystemConfigKey.INVOICE_PAYMENT_DUE_DAYS);
+        LocalDateTime dueDate = LocalDateTime.now().plusDays(dueDays);
+        Invoice invoice = Invoice.builder()
+                .user(winner)
+                .auctionSession(session)
+                .product(session.getProduct())
+                .finalPrice(session.getBuyNowPrice())
+                .status(InvoiceStatus.PENDING)
+                .type(InvoiceType.AUCTION_SALE)
+                .createdAt(LocalDateTime.now())
+                .dueDate(dueDate)
+                .build();
+        return invoiceRepository.save(invoice);
     }
 
     public PageResponse<InvoiceResponse> getMyInvoices(InvoiceStatus status, InvoiceType type, int page, int size) {
@@ -260,12 +276,17 @@ public class InvoiceService {
         disputeRepository.save(dispute);
 
         User seller = invoice.getProduct().getSeller();
-        // A. Báo cho Seller
+        // Báo cho Seller
         String sellerMsg = "Người mua ĐANG KHIẾU NẠI đơn hàng '" + invoice.getProduct().getName() + "'. Lý do: " + request.getReason();
         notificationService.createNotification(seller, sellerMsg, "/invoices/" + invoice.getId());
-        // B. Báo cho Buyer xác nhận
+        // Báo cho Buyer
         String buyerMsg = "Khiếu nại của bạn đã được ghi nhận. Hệ thống đã tạm dừng quy trình hoàn thành đơn hàng.";
         notificationService.createNotification(buyer, buyerMsg, "/invoices/" + invoice.getId());
+        // Báo cho Admin
+        String adminMsg = String.format("TRANH CHẤP MỚI: Đơn hàng #%s đang bị khiếu nại. Lý do: %s",
+                invoice.getId(), request.getReason());
+        String adminLink = "/admin/disputes/" + dispute.getId();
+        notificationService.sendNotificationToAllAdmins(adminMsg, adminLink);
 
         return MessageResponse.builder()
                 .message("Đã gửi khiếu nại thành công. Admin và Người bán sẽ sớm liên hệ giải quyết.")
@@ -435,5 +456,99 @@ public class InvoiceService {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + invoiceId));
         return invoiceMapper.toInvoiceResponse(invoice);
+    }
+
+    //========================Admin Section========================//
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public InvoiceResponse updateInvoiceForAdmin(Long id, AdminUpdateInvoiceRequest request) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.INVOICE_NOT_FOUND + id));
+        InvoiceStatus oldStatus = invoice.getStatus();
+        StringBuilder changeLog = new StringBuilder();
+
+        if (invoice.getStatus() == InvoiceStatus.PENDING || invoice.getStatus() == InvoiceStatus.PAID) {
+            if (request.getRecipientName() != null && !request.getRecipientName().equals(invoice.getRecipientName())) {
+                invoice.setRecipientName(request.getRecipientName());
+                changeLog.append("Tên người nhận: ").append(request.getRecipientName()).append("; ");
+            }
+            if (request.getRecipientPhone() != null && !request.getRecipientPhone().equals(invoice.getRecipientPhone())) {
+                invoice.setRecipientPhone(request.getRecipientPhone());
+                changeLog.append("SĐT: ").append(request.getRecipientPhone()).append("; ");
+            }
+            if (request.getShippingAddress() != null && !request.getShippingAddress().equals(invoice.getShippingAddress())) {
+                invoice.setShippingAddress(request.getShippingAddress());
+                changeLog.append("Địa chỉ: ").append(request.getShippingAddress()).append("; ");
+            }
+        }
+
+        if (request.getTrackingCode() != null) {
+            invoice.setTrackingCode(request.getTrackingCode());
+            changeLog.append("Mã vận đơn mới: ").append(request.getTrackingCode()).append("; ");
+        }
+        if (request.getCarrier() != null) {
+            invoice.setCarrier(request.getCarrier());
+            changeLog.append("ĐVVC mới: ").append(request.getCarrier()).append("; ");
+        }
+        if (request.getStatus() != null && request.getStatus() != oldStatus) {
+            // Logic đặc biệt: Nếu chuyển sang PAID -> Có thể cần kiểm tra tồn kho hoặc logic khác (tùy nghiệp vụ)
+            // Ở đây ta cho phép Admin override
+            invoice.setStatus(request.getStatus());
+            changeLog.append("Trạng thái: ").append(oldStatus).append(" -> ").append(request.getStatus()).append("; ");
+            // Nếu chuyển sang SHIPPING -> Cập nhật thời gian ship nếu chưa có
+            if (request.getStatus() == InvoiceStatus.SHIPPING && invoice.getShippedAt() == null) {
+                invoice.setShippedAt(LocalDateTime.now());
+            }
+        }
+
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        // GHI AUDIT LOG & THÔNG BÁO
+        if (!changeLog.isEmpty()) {
+            String reason = request.getNote() != null ? request.getNote() : "Không có ghi chú";
+            String logContent = String.format("Admin thay đổi: [%s]. Lý do: %s", changeLog.toString(), reason);
+
+            auditLogService.saveLog(LogAction.UPDATE_INVOICE, invoice.getId().toString(), logContent);
+
+            String userMsg = String.format("Đơn hàng #%s của bạn đã được cập nhật bởi Admin. Trạng thái hiện tại: %s",
+                    invoice.getId(), invoice.getStatus());
+            notificationService.createNotification(invoice.getUser(), userMsg, "/invoice/" + invoice.getId());
+            // Gửi thông báo cho Seller (nếu cần)
+            notificationService.createNotification(invoice.getProduct().getSeller(),
+                    "Đơn hàng #" + invoice.getId() + " đã được Admin cập nhật.", "/invoice/" + invoice.getId());
+        }
+
+        return invoiceMapper.toInvoiceResponse(savedInvoice);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public PageResponse<InvoiceResponse> getAllInvoicesForAdmin(InvoiceAdminSearchRequest request, int page, int size) {
+        Sort sort = Sort.by("createdAt").descending();
+        if (request.getSort() != null) {
+            sort = switch (request.getSort().toLowerCase()) {
+                case "oldest" -> Sort.by("createdAt").ascending();
+                case "price_asc" -> Sort.by("finalPrice").ascending();
+                case "price_desc" -> Sort.by("finalPrice").descending();
+                case "due_date_asc" -> Sort.by("dueDate").ascending();
+                case "due_date_desc" -> Sort.by("dueDate").descending();
+
+                default -> Sort.by("createdAt").descending();
+            };
+        }
+        Pageable pageable = PageRequest.of(page - 1, size, sort);
+        var spec = InvoiceSpecification.getFilter(request);
+        Page<Invoice> invoicePage = invoiceRepository.findAll(spec, pageable);
+        List<InvoiceResponse> responses = invoicePage.getContent().stream().map(invoice -> {
+            InvoiceResponse response = invoiceMapper.toInvoiceResponse(invoice);
+            return response;
+        }).toList();
+
+        return PageResponse.<InvoiceResponse>builder()
+                .currentPage(page)
+                .totalPages(invoicePage.getTotalPages())
+                .pageSize(invoicePage.getSize())
+                .totalElements(invoicePage.getTotalElements())
+                .data(responses)
+                .build();
     }
 }

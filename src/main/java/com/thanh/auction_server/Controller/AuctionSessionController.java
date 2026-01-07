@@ -1,10 +1,10 @@
 package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.constants.AuctionStatus;
+import com.thanh.auction_server.dto.request.AdminUpdateSessionRequest;
+import com.thanh.auction_server.dto.request.AuctionSessionAdminSearchRequest;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
-import com.thanh.auction_server.dto.response.AuctionSessionResponse;
-import com.thanh.auction_server.dto.response.CreateAuctionSessionResponse;
-import com.thanh.auction_server.dto.response.PageResponse;
+import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.service.auction.AuctionSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -92,5 +92,29 @@ public class AuctionSessionController {
         PageResponse<AuctionSessionResponse> response =
                 auctionSessionService.getAllAuctionScheduleDesc(page, size);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/buy-now")
+    public ResponseEntity<InvoiceResponse> buyNow(@PathVariable Long id) {
+        return ResponseEntity.ok(auctionSessionService.buyNow(id));
+    }
+
+//    ============= Admin =============
+
+    @GetMapping("/admin/search")
+    public ResponseEntity<PageResponse<AdminAuctionSessionResponse>> getAllSessionsForAdmin(
+            @ModelAttribute AuctionSessionAdminSearchRequest request,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(auctionSessionService.getAllAuctionSessionsForAdmin(request, page, size));
+    }
+
+    @PutMapping("/admin/{id}")
+    public ResponseEntity<AdminAuctionSessionResponse> updateSessionForAdmin(
+            @PathVariable Long id,
+            @RequestBody AdminUpdateSessionRequest request
+    ) {
+        return ResponseEntity.ok(auctionSessionService.updateAuctionSessionForAdmin(id, request));
     }
 }

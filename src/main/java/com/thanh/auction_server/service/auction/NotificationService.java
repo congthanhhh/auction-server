@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -99,6 +100,19 @@ public class NotificationService {
         notification.setIsRead(true);
         Notification savedNotification = notificationRepository.save(notification);
         return notificationMapper.toNotificationResponse(savedNotification);
+    }
+
+    @Transactional
+    public void sendNotificationToAllAdmins(String message, String link) {
+        List<User> admins = userRepository.findByRoles_Name("ADMIN");
+        if (admins.isEmpty()) {
+            log.warn("No ADMINs found to send notification.");
+            return;
+        }
+        for (User admin : admins) {
+            createNotification(admin, message, link);
+        }
+        log.info("Sent notification to {} admins: {}", admins.size(), message);
     }
 
 }

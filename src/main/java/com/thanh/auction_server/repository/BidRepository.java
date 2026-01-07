@@ -12,11 +12,7 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
     // Tìm tất cả các bid của một phiên đấu giá, sắp xếp theo thời gian (mới nhất trước)
     Page<Bid> findByAuctionSessionIdOrderByBidTimeDesc(Long auctionSessionId, Pageable pageable);
 
-    // Tìm bid cao nhất (Max Bid) của một người dùng cụ thể cho một phiên
-    // Optional<Bid> findTopByUser_IdAndAuctionSession_IdOrderByAmountDesc(String userId, Long auctionSessionId);
-
     // Tìm bid cao nhất (Max Bid) hiện tại của phiên đấu giá (không phân biệt user)
-    // Dùng JPQL để lấy bid có amount cao nhất, nếu bằng nhau thì lấy cái cũ hơn (bidTime nhỏ hơn)
     @Query("SELECT b FROM Bid b WHERE b.auctionSession.id = :sessionId ORDER BY b.amount DESC, b.bidTime ASC")
     List<Bid> findHighestBidsForSession(Long sessionId, Pageable pageable); // Pageable(0, 1) để lấy top 1
 
@@ -24,4 +20,10 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
      long countByAuctionSessionId(Long auctionSessionId);
 
     long countByAuctionSession_Product_Id(Long productId);
+
 }
+
+
+
+//Use countByAuctionSessionId when you want to count bids for a single auction session
+//Use countByAuctionSession_Product_Id when you want to count total bids across all auction sessions for a product (a product might have multiple auction sessions)

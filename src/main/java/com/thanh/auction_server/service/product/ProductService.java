@@ -18,6 +18,7 @@ import com.thanh.auction_server.repository.ImageRepository;
 import com.thanh.auction_server.repository.ProductRepository;
 import com.thanh.auction_server.repository.UserRepository;
 import com.thanh.auction_server.service.admin.AuditLogService;
+import com.thanh.auction_server.service.auction.NotificationService;
 import com.thanh.auction_server.specification.ProductSpecification;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class ProductService {
     UserRepository userRepository;
     ProductMapper productMapper;
     AuditLogService auditLogService;
+    NotificationService notificationService;
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
@@ -79,6 +81,13 @@ public class ProductService {
         }
 
         var savedProduct = productRepository.save(product);
+        // Báo admin sản phầm chờ duyệt
+        if (savedProduct.getStatus() == ProductStatus.WAITING_FOR_APPROVAL) {
+            String adminMsg = String.format("SẢN PHẨM MỚI: User '%s' vừa đăng bán '%s'. Vui lòng kiểm duyệt.",
+                    savedProduct.getSeller().getUsername(), savedProduct.getName());
+            String adminLink = "/admin/products";
+            notificationService.sendNotificationToAllAdmins(adminMsg, adminLink);
+        }
         return productMapper.toProductResponse(savedProduct);
     }
 

@@ -9,4 +9,6 @@ public class LogAction {
     public static final String REJECT_PRODUCT = "REJECT_PRODUCT";
     public static final String DISABLE_PRODUCT = "DISABLE_PRODUCT";
     public static final String ENABLE_PRODUCT = "ENABLE_PRODUCT";
+    public static final String UPDATE_AUCTION = "UPDATE_AUCTION";
+    public static final String UPDATE_INVOICE = "UPDATE_INVOICE";
 }
