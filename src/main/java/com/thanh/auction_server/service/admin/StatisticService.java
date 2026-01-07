@@ -29,6 +29,8 @@ public class StatisticService {
     AuctionSessionRepository auctionSessionRepository;
 
     private static final BigDecimal COMMISSION_RATE = new BigDecimal("0.10");
+//    BigDecimal feePercent = systemParameterService.getBigDecimalConfig(SystemConfigKey.COMMISSION_RATE_FEE);
+//    BigDecimal COMMISSION_RATE = feePercent;
 
     public StatisticResponse getDashboardStatistics(Integer month, Integer year) {
         LocalDateTime startDate = null;

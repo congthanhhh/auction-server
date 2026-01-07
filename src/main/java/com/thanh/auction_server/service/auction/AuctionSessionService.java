@@ -14,6 +14,7 @@ import com.thanh.auction_server.mapper.AuctionSessionMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.ProductRepository;
+import com.thanh.auction_server.service.admin.SystemParameterService;
 import com.thanh.auction_server.service.invoice.InvoiceService;
 import com.thanh.auction_server.service.payment.PaymentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,6 +46,7 @@ public class AuctionSessionService {
     NotificationService notificationService;
     InvoiceService invoiceService;
     PaymentService paymentService;
+    SystemParameterService systemParameterService;
 
     @Transactional
     public CreateAuctionSessionResponse createAuctionSession(AuctionSessionRequest request, HttpServletRequest httpRequest) {
@@ -79,7 +81,9 @@ public class AuctionSessionService {
         BigDecimal reservePrice = request.getReservePrice() == null ? BigDecimal.ZERO : request.getReservePrice();
         // TÍNH PHÍ GIA SAN & TRẢ LINK THANH TOÁN
         if (reservePrice.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal feeAmount = reservePrice.multiply(BigDecimal.valueOf(0.05));
+            BigDecimal feePercent = systemParameterService.getBigDecimalConfig(SystemConfigKey.LISTING_FEE_PERCENT);
+            BigDecimal feeAmount = reservePrice.multiply(feePercent);
+//            BigDecimal feeAmount = reservePrice.multiply(BigDecimal.valueOf(0.05));
             //Lưu Session (Status: WAITING_PAYMENT)
             auctionSession.setStatus(AuctionStatus.WAITING_PAYMENT);
             auctionSessionRepository.save(auctionSession);

@@ -20,6 +20,8 @@ import com.thanh.auction_server.repository.DisputeRepository;
 import com.thanh.auction_server.repository.FeedbackRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
 import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.service.admin.AuditLogService;
+import com.thanh.auction_server.service.admin.SystemParameterService;
 import com.thanh.auction_server.service.auction.NotificationService;
 import com.thanh.auction_server.service.authenticate.UserService;
 import com.thanh.auction_server.service.payment.PaymentService;
@@ -55,6 +57,8 @@ public class InvoiceService {
     UserService userService;
     PaymentService paymentService;
     NotificationService notificationService;
+    SystemParameterService systemParameterService;
+    AuditLogService auditLogService;
 
     @Transactional
     public void createInvoiceForWinner(AuctionSession session, User winner) {
@@ -65,8 +69,9 @@ public class InvoiceService {
             log.warn("Invoice Sale already exists for Auction Session ID: {}", session.getId());
             return;
         }
-        LocalDateTime dueDate = LocalDateTime.now().plusDays(4);
-
+        // LocalDateTime dueDate = LocalDateTime.now().plusDays(4);
+        int dueDays = systemParameterService.getIntConfig(SystemConfigKey.INVOICE_PAYMENT_DUE_DAYS);
+        LocalDateTime dueDate = LocalDateTime.now().plusDays(dueDays);
         Invoice invoice = Invoice.builder()
                 .user(winner)
                 .auctionSession(session)
@@ -91,7 +96,7 @@ public class InvoiceService {
         Page<Invoice> invoicePage = invoiceRepository.findByUserUsernameAndStatusAndType(username, status, type, pageable);
         List<InvoiceResponse> responses = invoicePage.getContent().stream().map(invoice -> {
             InvoiceResponse response = invoiceMapper.toInvoiceResponse(invoice);
-        // check has been feedback
+            // check has been feedback
             boolean hasFeedback = feedbackRepository.existsByInvoiceIdAndFromUserId(invoice.getId(), currentUser.getId());
             response.setHasFeedback(hasFeedback);
             return response;
@@ -270,7 +275,9 @@ public class InvoiceService {
     @Transactional
     public void autoFinishInvoices() {
         //Tự động hoàn thành sau 15 ngày
-        LocalDateTime thresholdTime = LocalDateTime.now().minusDays(15);
+//        LocalDateTime thresholdTime = LocalDateTime.now().minusDays(15);
+        int autoFinishDays = systemParameterService.getIntConfig(SystemConfigKey.INVOICE_AUTO_COMPLETED_DAYS);
+        LocalDateTime thresholdTime = LocalDateTime.now().minusDays(autoFinishDays);
         // Tìm các đơn SHIPPING đã quá hạn
         List<Invoice> invoices = invoiceRepository.findByStatusAndShippedAtBefore(InvoiceStatus.SHIPPING, thresholdTime);
         if (invoices.isEmpty()) {
@@ -311,6 +318,7 @@ public class InvoiceService {
                 .data(responses)
                 .build();
     }
+
     //========================Díspute Section========================//
     @Transactional
     public MessageResponse resolveDispute(Long disputeId, ResolveDisputeRequest request) {
@@ -358,6 +366,11 @@ public class InvoiceService {
         dispute.setAdminNote(request.getAdminNote());
         dispute.setResolvedAt(LocalDateTime.now());
         disputeRepository.save(dispute);
+
+        // --- GHI LOG ---
+        String details = String.format("Phán quyết: %s. Ghi chú: %s",
+                request.getDecision(), request.getAdminNote());
+        auditLogService.saveLog(LogAction.RESOLVE_DISPUTE, invoice.getId().toString(), details);
 
         return MessageResponse.builder()
                 .message("Đã giải quyết khiếu nại thành công.")

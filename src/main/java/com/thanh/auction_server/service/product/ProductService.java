@@ -1,6 +1,7 @@
 package com.thanh.auction_server.service.product;
 
 import com.thanh.auction_server.constants.ErrorMessage;
+import com.thanh.auction_server.constants.LogAction;
 import com.thanh.auction_server.constants.ProductStatus;
 import com.thanh.auction_server.dto.request.ProductRequest;
 import com.thanh.auction_server.dto.request.ProductSearchRequest;
@@ -16,6 +17,7 @@ import com.thanh.auction_server.repository.CategoryRepository;
 import com.thanh.auction_server.repository.ImageRepository;
 import com.thanh.auction_server.repository.ProductRepository;
 import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.service.admin.AuditLogService;
 import com.thanh.auction_server.specification.ProductSpecification;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,7 @@ public class ProductService {
     ImageService imageService;
     UserRepository userRepository;
     ProductMapper productMapper;
+    AuditLogService auditLogService;
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
@@ -187,6 +190,8 @@ public class ProductService {
         var product = productRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
         product.setIsActive(false);
+        auditLogService.saveLog(LogAction.DISABLE_PRODUCT, id.toString(),
+                "Sản phẩm '" + product.getName() + "' đã bị xóa (vô hiệu hóa).");
         productRepository.save(product);
     }
 
@@ -194,6 +199,8 @@ public class ProductService {
         var product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
         product.setIsActive(true);
+        auditLogService.saveLog(LogAction.ENABLE_PRODUCT, id.toString(),
+                "Sản phẩm '" + product.getName() + "' đã được kích hoạt lại.");
         productRepository.save(product);
     }
 
@@ -267,5 +274,8 @@ public class ProductService {
             product.setStatus(ProductStatus.REJECTED);
         }
         productRepository.save(product);
+        String action = isApproved ? LogAction.VERIFY_PRODUCT : LogAction.REJECT_PRODUCT;
+        auditLogService.saveLog(action, productId.toString(),
+                "Sản phẩm '" + product.getName() + "' đã được " + (isApproved ? "phê duyệt." : "từ chối."));
     }
 }

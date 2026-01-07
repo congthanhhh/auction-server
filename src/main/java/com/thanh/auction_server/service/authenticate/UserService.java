@@ -1,5 +1,6 @@
 package com.thanh.auction_server.service.authenticate;
 
+import com.thanh.auction_server.constants.LogAction;
 import com.thanh.auction_server.constants.RoleEnum;
 import com.thanh.auction_server.dto.request.*;
 import com.thanh.auction_server.dto.response.*;
@@ -10,6 +11,7 @@ import com.thanh.auction_server.exception.*;
 import com.thanh.auction_server.mapper.ProductMapper;
 import com.thanh.auction_server.mapper.UserMapper;
 import com.thanh.auction_server.repository.*;
+import com.thanh.auction_server.service.admin.AuditLogService;
 import com.thanh.auction_server.service.utils.EmailService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +48,7 @@ public class UserService {
     FeedbackRepository feedbackRepository;
     ProductMapper productMapper;
     ProductRepository productRepository;
+    AuditLogService auditLogService;
 
     public UserResponse createUser(UserCreationRequest request) {
         if (userRepository.existsByUsername(request.getUsername()))
@@ -164,6 +167,8 @@ public class UserService {
                 () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
         user.setIsActive(isActive);
         userRepository.save(user);
+        String action = isActive ? LogAction.UNLOCK_USER : LogAction.LOCK_USER;
+        auditLogService.saveLog(action, id, "Admin đã change status thành: " + isActive);
         return isActive ? "User activated successfully" : "User deactivated successfully";
     }
 
