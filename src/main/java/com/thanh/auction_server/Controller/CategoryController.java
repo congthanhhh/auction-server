@@ -2,6 +2,7 @@ package com.thanh.auction_server.Controller;
 
 import com.thanh.auction_server.dto.request.CategoryRequest;
 import com.thanh.auction_server.dto.response.CategoryResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.service.product.CategoryService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -35,8 +36,11 @@ public class CategoryController {
     }
 
     @GetMapping
-    ResponseEntity<List<CategoryResponse>> getAllCategories() {
-        return ResponseEntity.ok(categoryService.getAllCategories());
+    ResponseEntity<PageResponse<CategoryResponse>> getAllCategories(
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size
+    ) {
+        return ResponseEntity.<PageResponse<CategoryResponse>>ok(categoryService.getAllCategories(page, size));
     }
 
     @GetMapping("/{id}")

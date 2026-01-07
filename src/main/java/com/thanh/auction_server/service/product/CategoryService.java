@@ -3,6 +3,7 @@ package com.thanh.auction_server.service.product;
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.dto.request.CategoryRequest;
 import com.thanh.auction_server.dto.response.CategoryResponse;
+import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.Category;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
@@ -12,6 +13,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,11 +37,16 @@ public class CategoryService {
         return categoryMapper.toCategoryResponse(categoryRepository.save(category));
     }
 
-    public List<CategoryResponse> getAllCategories() {
-        return categoryRepository.findAll()
-                .stream()
-                .map(categoryMapper::toCategoryResponse)
-                .collect(Collectors.toList());
+    public PageResponse<CategoryResponse> getAllCategories(int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        var pageData = categoryRepository.findAll(pageable);
+        return PageResponse.<CategoryResponse>builder()
+                .data(pageData.getContent().stream().map(categoryMapper::toCategoryResponse).toList())
+                .currentPage(page)
+                .pageSize(size)
+                .totalElements(pageData.getTotalElements())
+                .totalPages(pageData.getTotalPages())
+                .build();
     }
 
     public CategoryResponse getCategoryById(Long id) {
@@ -50,10 +58,6 @@ public class CategoryService {
     public CategoryResponse updateCategory(Long id, CategoryRequest request) {
         Category existingCategory = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + id));
-        if (!existingCategory.getName().equals(request.getName())
-                && categoryRepository.existsByName(request.getName())) {
-            throw new DataConflictException(ErrorMessage.CATEGORY_ALREADY_EXIST);
-        }
         categoryMapper.updateCategory(existingCategory, request);
         Category updatedCategory = categoryRepository.save(existingCategory);
         return categoryMapper.toCategoryResponse(updatedCategory);
