@@ -12,12 +12,8 @@ import java.util.List;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserUpdateRequest {
-    String username;
     String firstName;
     String lastName;
-    String password;
     String email;
     String phoneNumber;
-    LocalDateTime updateAt = LocalDateTime.now();
-    List<String> roles;
 }

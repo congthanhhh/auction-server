@@ -110,14 +110,25 @@ public class UserService {
                 .build();
     }
 
-    public UserResponse updateUser(String id, UserUpdateRequest request) {
-        User user = userRepository.findById(id).orElseThrow(
+    @Transactional
+    public UserResponse updateMyInfo(UserUpdateRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username).orElseThrow(
                 () -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));
-        userMapper.updateUser(user, request);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        var roles = roleRepository.findAllById(request.getRoles());
-        user.setRoles(new HashSet<>(roles));
-        return userMapper.toUserResponse(userRepository.save(user));
+        if (request.getEmail() != null
+                && !request.getEmail().equals(currentUser.getEmail())
+                && userRepository.existsByEmail(request.getEmail())) {
+            throw new DataConflictException(ErrorMessage.EMAIL_ALREADY_EXIST);
+        }
+
+        if (request.getPhoneNumber() != null
+                && !request.getPhoneNumber().equals(currentUser.getPhoneNumber())
+                && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new DataConflictException(ErrorMessage.PHONE_ALREADY_EXIST);
+        }
+        userMapper.updateUser(currentUser, request);
+        currentUser.setUpdatedAt(LocalDateTime.now());
+        return userMapper.toUserResponse(userRepository.save(currentUser));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -270,6 +281,7 @@ public class UserService {
         userResponse.setNoPassword(!StringUtils.hasText(user.getPassword()));
         return userResponse;
     }
+
     // ================Admin===========================
     @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<UserResponse> getUsers(Boolean isActive, String roleName, int page, int size, String sortDir) {
@@ -315,6 +327,7 @@ public class UserService {
         user.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
         return userMapper.toUserResponse(userRepository.save(user));
     }
+
     @PreAuthorize("hasRole('ADMIN')")
     public UserResponse updateUserByAdmin(String userId, AdminUpdateRequest request) {
         User user = userRepository.findById(userId)

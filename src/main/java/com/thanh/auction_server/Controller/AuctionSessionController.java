@@ -99,6 +99,17 @@ public class AuctionSessionController {
         return ResponseEntity.ok(auctionSessionService.buyNow(id));
     }
 
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<AuctionSessionResponse> cancelSession(@PathVariable Long id) {
+        return ResponseEntity.ok(auctionSessionService.stopAuctionSessionByUser(id));
+    }
+
+    @PutMapping("/{id}/reactivate")
+    public ResponseEntity<AuctionSessionResponse> reactiveSession(@PathVariable Long id) {
+        return ResponseEntity.ok(auctionSessionService.reactivateAuctionSession(id));
+    }
+
+
 //    ============= Admin =============
 
     @GetMapping("/admin/search")

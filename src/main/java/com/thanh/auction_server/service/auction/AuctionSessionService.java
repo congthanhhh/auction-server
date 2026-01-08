@@ -10,6 +10,7 @@ import com.thanh.auction_server.entity.Invoice;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
+import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.mapper.AuctionSessionMapper;
 import com.thanh.auction_server.mapper.InvoiceMapper;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
@@ -346,6 +347,50 @@ public class AuctionSessionService {
 
         }
         return sessionsToEnd;
+    }
+
+    @Transactional
+    public AuctionSessionResponse stopAuctionSessionByUser(Long sessionId) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
+
+        AuctionSession session = auctionSessionRepository.findByIdWithLock(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND + sessionId));
+
+        if (!session.getProduct().getSeller().getId().equals(currentUser.getId())) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED_ACCESS);
+        }
+        if (session.getStatus() == AuctionStatus.ENDED || session.getStatus() == AuctionStatus.CANCELLED) {
+            throw new DataConflictException("Phiên đấu giá đã kết thúc hoặc bị hủy.");
+        }
+        if (session.getBids() != null && !session.getBids().isEmpty()) {
+            throw new DataConflictException("Không thể hủy phiên đấu giá vì đã có người tham gia đặt giá.");
+        }
+        session.setStatus(AuctionStatus.CANCELLED);
+        session.setUpdatedAt(LocalDateTime.now());
+        AuctionSession savedSession = auctionSessionRepository.save(session);
+        return auctionSessionMapper.toAuctionSessionResponse(savedSession);
+    }
+
+    @Transactional
+    public AuctionSessionResponse reactivateAuctionSession(Long sessionId) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
+        AuctionSession session = auctionSessionRepository.findByIdWithLock(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND + sessionId));
+        if (!session.getProduct().getSeller().getId().equals(currentUser.getId())) {
+            throw new UnauthorizedException(ErrorMessage.UNAUTHORIZED_ACCESS);
+        }
+        if (session.getStatus() != AuctionStatus.CANCELLED) {
+            throw new DataConflictException("Chỉ có thể khôi phục các phiên đấu giá đã bị hủy.");
+        }
+        session.setStatus(AuctionStatus.ACTIVE);
+        session.setUpdatedAt(LocalDateTime.now());
+
+        AuctionSession savedSession = auctionSessionRepository.save(session);
+        return auctionSessionMapper.toAuctionSessionResponse(savedSession);
     }
 
     //================= ADMIN METHODS =====================
