@@ -329,6 +329,7 @@ public class UserService {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
+//    @PreAuthorize("hasRole('ADMIN') and hasAuthority('FULL_EDIT')")
     public UserResponse updateUserByAdmin(String userId, AdminUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(ErrorMessage.USER_NOT_FOUND));

@@ -132,15 +132,15 @@ public class BidService {
         User previousHighestBidder = currentHighestBidder;
         boolean isNewHighestBidder = false;
         Bid savedBid = null;
-        // 1. NGƯỜI ĐANG DẪN ĐẦU TỰ ĐẶT LẠI (UPDATE MAX BID)
+        // NGƯỜI ĐANG DẪN ĐẦU TỰ ĐẶT LẠI (UPDATE MAX BID)
         if (currentHighestBidder != null && currentHighestBidder.getId().equals(bidder.getId())) {
             if (newMaxBid.compareTo(currentHighestMaxBid) <= 0) {
                 throw new DataConflictException("Giá mới phải cao hơn giá max hiện tại của bạn (" + currentHighestMaxBid + ")");
             }
-            session.setHighestMaxBid(newMaxBid); // Cập nhật Max Bid
+            session.setHighestMaxBid(newMaxBid);
             // Tự nâng giá -> Check xem có vượt qua sàn chưa
             if (reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0) {
-                // Nếu giá hiện tại đang thấp hơn sàn -> Đẩy lên bằng sàn ngay
+                // Nếu giá hiện tại đang thấp hơn sàn -> Đẩy lên bằng sàn
                 if (session.getCurrentPrice().compareTo(reservePrice) < 0) {
                     session.setCurrentPrice(reservePrice);
                     reserveMetNow = true;
@@ -153,15 +153,14 @@ public class BidService {
                     .auctionSession(session)
                     .resultingPrice(session.getCurrentPrice())
                     .build());
-            // 2. NGƯỜI KHÁC ĐẶT (User B) HOẶC LẦN ĐẦU TIÊN
+            // NGƯỜI KHÁC ĐẶT HOẶC LẦN ĐẦU TIÊN
         } else {
             // Trường hợp A: Thắng (Trở thành người dẫn đầu mới)
             if (newMaxBid.compareTo(currentHighestMaxBid) > 0) {
                 isNewHighestBidder = true;
                 session.setHighestBidder(bidder);
                 session.setHighestMaxBid(newMaxBid);
-
-                // Tính giá mới = Giá Max cũ + Bước giá (tại mức Max cũ)
+                // Tính giá mới = maxbid cũ + Bước giá
                 BigDecimal basePrice = currentHighestMaxBid.compareTo(BigDecimal.ZERO) > 0 ? currentHighestMaxBid : session.getStartPrice();
                 BigDecimal increment = calculateIncrement(basePrice);
                 BigDecimal newPrice = basePrice.add(increment);
@@ -185,14 +184,13 @@ public class BidService {
 //                }
 
                 if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {
-                    // Kiểm tra giá sàn có thực sự tồn tại (phải lớn hơn 0)
                     boolean hasRealReserve = reservePrice != null && reservePrice.compareTo(BigDecimal.ZERO) > 0;
                     if (hasRealReserve && newMaxBid.compareTo(reservePrice) >= 0) {
                         // Trường hợp 1: Có giá sàn (>0) và người dùng đặt giá cao hơn hoặc bằng sàn
                         // Giá hiện tại sẽ nhảy lên bằng Giá sàn
                         newPrice = reservePrice.max(session.getStartPrice());
                     } else {
-                        // Trường hợp 2: Không có giá sàn (hoặc = 0) HOẶC người dùng đặt chưa tới sàn
+                        // Trường hợp 2: Không có giá sàn (hoặc = 0) or người dùng đặt chưa tới sàn
                         // Giá hiện tại sẽ bắt đầu từ Giá khởi điểm
                         newPrice = session.getStartPrice();
                     }
@@ -207,7 +205,7 @@ public class BidService {
                         .resultingPrice(session.getCurrentPrice())
                         .build());
 
-                // B. TRƯỜNG HỢP THUA (Proxy Defense - User A vẫn giữ búa)
+                // B. TRƯỜNG HỢP THUA (User A vẫn dẫn đầu)
             } else {
                 // --- BƯỚC 1: Lưu Bid của người thách đấu (User B) ---
                 Bid challengerBid = bidRepository.save(Bid.builder()
@@ -337,7 +335,7 @@ public class BidService {
             // 2. thông báo cho NGƯỜI CHIẾN THẮNG MỚI
             String winnerMsg;
             if (reserveMetNow) {
-                // 2a. Người chiến thắng MỚI và giá sàn ĐÃ được đáp ứng
+                // Người chiến thắng MỚI và giá sàn ĐÃ được đáp ứng
                 if (!reserveMetBefore) {
                     // Người chiến thắng MỚI và giá sàn ĐƯỢC đáp ứng LẦN ĐẦU TIÊN
                     winnerMsg = String.format(
@@ -353,7 +351,7 @@ public class BidService {
                     );
                 }
             } else {
-                // 2b. Người chiến thắng MỚI nhưng giá sàn CHƯA được đáp ứng
+                // Người chiến thắng MỚI nhưng giá sàn CHƯA được đáp ứng
                 winnerMsg = String.format(
                         "Bạn đang dẫn đầu phiên đấu giá '%s', nhưng giá sàn chưa được đáp ứng.",
                         productName
@@ -361,7 +359,7 @@ public class BidService {
             }
             notificationService.createNotification(bidder, winnerMsg, link);
         } else {
-            // B. Bid KHÔNG thành công do max bid không đủ cao
+            // Bid KHÔNG thành công do max bid không đủ cao
             if (previousHighestBidder != null && !previousHighestBidder.getId().equals(bidder.getId())) {
                 String notEnoughMsg = String.format(
                         "Giá bạn đặt cho '%s' chưa đủ cao. Bạn đã bị vượt qua, mức giá hiện tại: '%s'",
