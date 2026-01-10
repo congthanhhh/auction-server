@@ -10,13 +10,11 @@ import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.dto.response.ProductResponse;
 import com.thanh.auction_server.entity.Image;
 import com.thanh.auction_server.entity.Product;
+import com.thanh.auction_server.exception.DataConflictException;
 import com.thanh.auction_server.exception.ResourceNotFoundException;
 import com.thanh.auction_server.exception.UserNotFoundException;
 import com.thanh.auction_server.mapper.ProductMapper;
-import com.thanh.auction_server.repository.CategoryRepository;
-import com.thanh.auction_server.repository.ImageRepository;
-import com.thanh.auction_server.repository.ProductRepository;
-import com.thanh.auction_server.repository.UserRepository;
+import com.thanh.auction_server.repository.*;
 import com.thanh.auction_server.service.admin.AuditLogService;
 import com.thanh.auction_server.service.auction.NotificationService;
 import com.thanh.auction_server.specification.ProductSpecification;
@@ -30,6 +28,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +46,7 @@ import java.util.stream.Collectors;
 public class ProductService {
     ProductRepository productRepository;
     CategoryRepository categoryRepository;
+    BidRepository bidRepository;
     ImageRepository imageRepository;
     ImageService imageService;
     UserRepository userRepository;
@@ -286,5 +286,82 @@ public class ProductService {
         String action = isApproved ? LogAction.VERIFY_PRODUCT : LogAction.REJECT_PRODUCT;
         auditLogService.saveLog(action, productId.toString(),
                 "Sản phẩm '" + product.getName() + "' đã được " + (isApproved ? "phê duyệt." : "từ chối."));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional
+    public ProductResponse updateProductByAdmin(Long id, ProductUpdateRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.PRODUCT_NOT_FOUND + id));
+        if (bidRepository.existsBidsByProductId(id)) {
+            throw new DataConflictException("Admin không thể chỉnh sửa sản phẩm đang đấu giá hoặc đã bán.");
+        }
+        Product updatedProduct = updateProductCommonLogic(product, request);
+        if (auditLogService != null) {
+            auditLogService.saveLog(LogAction.UPDATE_PRODUCT, id.toString(), "Admin updated product info");
+        }
+
+        return productMapper.toProductResponse(updatedProduct);
+    }
+
+    //=======================PRIVATE METHOD=======================
+    private Product updateProductCommonLogic(Product product, ProductUpdateRequest request) {
+        // 1. Update Category (Nếu có thay đổi)
+        if (request.getCategoryId() != null && !request.getCategoryId().equals(product.getCategory().getId())) {
+            var newCategory = categoryRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.CATEGORY_NOT_FOUND + request.getCategoryId()));
+            product.setCategory(newCategory);
+        }
+
+        // 2. Map các field cơ bản (Tên, Mô tả, StartPrice...)
+        // Mapper đã có @MappingTarget và ignore images/category -> An toàn
+        productMapper.updateProduct(product, request);
+
+        // 3. Xử lý ảnh (Thêm/Xóa)
+        handleProductImages(product, request);
+
+        // 4. Update timestamp
+        // product.setUpdatedAt(LocalDateTime.now()); // Nếu entity có field này
+
+        return productRepository.save(product);
+    }
+
+    private void handleProductImages(Product product, ProductUpdateRequest request) {
+        // A. Xử lý xóa ảnh (Remove)
+        if (request.getImageIdsToRemove() != null && !request.getImageIdsToRemove().isEmpty()) {
+            Set<Image> imagesCurrentlyAssociated = product.getImages();
+
+            // Lọc ra các ảnh thực sự thuộc về product này và cần xóa
+            List<Image> imagesToRemove = imagesCurrentlyAssociated.stream()
+                    .filter(img -> request.getImageIdsToRemove().contains(img.getId()))
+                    .toList();
+
+            if (!imagesToRemove.isEmpty()) {
+                log.info("Removing {} images from product ID {}", imagesToRemove.size(), product.getId());
+
+                // Quan trọng: Xóa khỏi Set của Product trước để Hibernate không hiểu lầm
+                imagesToRemove.forEach(imagesCurrentlyAssociated::remove);
+
+                // Xóa vật lý (Cloudinary + DB)
+                for (Image img : imagesToRemove) {
+                    try {
+                        imageService.deleteImage(img.getId());
+                    } catch (Exception e) {
+                        log.error("Error deleting image ID {}: {}", img.getId(), e.getMessage());
+                    }
+                }
+            }
+        }
+        // B. Xử lý thêm ảnh (Add)
+        if (request.getImageIdsToAdd() != null && !request.getImageIdsToAdd().isEmpty()) {
+            List<Image> imagesToAdd = imageRepository.findAllById(request.getImageIdsToAdd());
+
+            if (!imagesToAdd.isEmpty()) {
+                log.info("Adding {} new images to product ID {}", imagesToAdd.size(), product.getId());
+                // Gán Product cho Image (nếu quan hệ 2 chiều) hoặc add vào Set
+                // Vì CascadeType.ALL, việc add vào Set sẽ tự động update FK
+                product.getImages().addAll(imagesToAdd);
+            }
+        }
     }
 }

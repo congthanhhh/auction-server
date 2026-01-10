@@ -30,4 +30,5 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     long countByStatus(ProductStatus status);
 
+
 }

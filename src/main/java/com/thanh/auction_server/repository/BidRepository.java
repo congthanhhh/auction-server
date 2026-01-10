@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -20,6 +21,10 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
      long countByAuctionSessionId(Long auctionSessionId);
 
     long countByAuctionSession_Product_Id(Long productId);
+
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Bid b WHERE b.auctionSession.product.id = :productId")
+    boolean existsBidsByProductId(@Param("productId") Long productId);
+
 
 }
 

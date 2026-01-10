@@ -6,6 +6,7 @@ import com.thanh.auction_server.dto.request.ProductUpdateRequest;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.dto.response.ProductResponse;
 import com.thanh.auction_server.service.product.ProductService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -91,5 +92,13 @@ public class ProductController {
             @RequestParam(defaultValue = "10") int size
     ) {
         return ResponseEntity.ok(productService.getProductsForAdmin(request, page, size));
+    }
+
+    @PutMapping("/admin/update/{id}")
+    public ResponseEntity<ProductResponse> updateProductByAdmin(
+            @PathVariable Long id,
+            @RequestBody @Valid ProductUpdateRequest request
+    ) {
+        return ResponseEntity.ok(productService.updateProductByAdmin(id, request));
     }
 }
