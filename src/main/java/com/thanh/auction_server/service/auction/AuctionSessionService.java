@@ -4,6 +4,7 @@ import com.thanh.auction_server.constants.*;
 import com.thanh.auction_server.dto.request.AdminUpdateSessionRequest;
 import com.thanh.auction_server.dto.request.AuctionSessionAdminSearchRequest;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
+import com.thanh.auction_server.dto.request.UpdateAuctionSessionRequest;
 import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.entity.AuctionSession;
 import com.thanh.auction_server.entity.Invoice;
@@ -290,7 +291,7 @@ public class AuctionSessionService {
         }
         return sessionsToStart;
     }
-
+    //================= PRIVATE METHODS =====================
     // Hàm private để xử lý kết thúc phiên (Giai đoạn 4)
     private void determineWinnerAndSetStatus(AuctionSession session) {
         User winner = session.getHighestBidder();
@@ -309,6 +310,27 @@ public class AuctionSessionService {
             }
         }
     }
+
+    private AuctionSession getSessionAndValidateNoBids(Long sessionId) {
+        AuctionSession session = auctionSessionRepository.findByIdWithLock(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND + sessionId));
+        if (session.getBids() != null && !session.getBids().isEmpty()) {
+            throw new DataConflictException("Không thể cập nhật phiên đấu giá vì đã có người tham gia đặt giá.");
+        }
+        return session;
+    }
+
+    private void validatePriceLogic(AuctionSession session) {
+        if (session.getBuyNowPrice() != null) {
+            if (session.getReservePrice() != null && session.getBuyNowPrice().compareTo(session.getReservePrice()) < 0) {
+                throw new DataConflictException("Giá mua ngay phải lớn hơn hoặc bằng giá sàn.");
+            }
+            if (session.getBuyNowPrice().compareTo(session.getStartPrice()) <= 0) {
+                throw new DataConflictException("Giá mua ngay phải lớn hơn giá khởi điểm.");
+            }
+        }
+    }
+    //================== PRIVATE METHODS =====================
 
     @Transactional
     public List<AuctionSession> endActiveAuctions() {
@@ -391,6 +413,79 @@ public class AuctionSessionService {
 
         AuctionSession savedSession = auctionSessionRepository.save(session);
         return auctionSessionMapper.toAuctionSessionResponse(savedSession);
+    }
+
+    @Transactional
+    public CreateAuctionSessionResponse updateAuctionSessionByUser(Long sessionId, UpdateAuctionSessionRequest request, HttpServletRequest httpRequest) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND + username));
+        AuctionSession session = getSessionAndValidateNoBids(sessionId);
+        if (!session.getProduct().getSeller().getId().equals(currentUser.getId())) {
+            throw new DataConflictException("Bạn không có quyền chỉnh sửa phiên đấu giá này.");
+        }
+        if (session.getStatus() == AuctionStatus.ENDED || session.getStatus() == AuctionStatus.CANCELLED) {
+            throw new DataConflictException("Không thể chỉnh sửa phiên đấu giá đã kết thúc hoặc bị hủy.");
+        }
+
+        BigDecimal oldReservePrice = session.getReservePrice() == null ? BigDecimal.ZERO : session.getReservePrice();
+        BigDecimal newReservePrice = request.getReservePrice();
+        String paymentUrl = null;
+        BigDecimal additionalFee = BigDecimal.ZERO;
+
+        if (newReservePrice != null && newReservePrice.compareTo(oldReservePrice) > 0) {
+            BigDecimal feePercent = systemParameterService.getBigDecimalConfig(SystemConfigKey.LISTING_FEE_PERCENT);
+            // (Giá mới - Giá cũ) * %phí giá sàn
+            BigDecimal priceDifference = newReservePrice.subtract(oldReservePrice);
+            additionalFee = priceDifference.multiply(feePercent);
+            if (additionalFee.compareTo(BigDecimal.ZERO) > 0) {
+                session.setStatus(AuctionStatus.WAITING_PAYMENT);
+                Invoice feeInvoice = Invoice.builder()
+                        .user(currentUser)
+                        .auctionSession(session)
+                        .product(session.getProduct())
+                        .finalPrice(additionalFee)
+                        .type(InvoiceType.LISTING_FEE)
+                        .status(InvoiceStatus.PENDING)
+                        .createdAt(LocalDateTime.now())
+                        .dueDate(LocalDateTime.now().plusMinutes(15))
+                        .shippingAddress("Phí bổ sung cập nhật giá sàn (" + feePercent.multiply(BigDecimal.valueOf(100)) + "%)")
+                        .recipientName(currentUser.getUsername())
+                        .recipientPhone(currentUser.getPhoneNumber())
+                        .build();
+                invoiceRepository.save(feeInvoice);
+                // URL thanh toán
+                paymentUrl = paymentService.createVnPayPayment(httpRequest, feeInvoice.getId(), null);
+            }
+        }
+        // Update các thông tin khác
+        if (request.getStartTime() != null) session.setStartTime(request.getStartTime());
+        if (request.getEndTime() != null) session.setEndTime(request.getEndTime());
+        if (session.getEndTime().isBefore(session.getStartTime())) {
+            throw new DataConflictException("Thời gian kết thúc phải sau thời gian bắt đầu.");
+        }
+        if (request.getStartPrice() != null) {
+            session.setStartPrice(request.getStartPrice());
+            session.setCurrentPrice(request.getStartPrice());
+        }
+        if (newReservePrice != null) session.setReservePrice(newReservePrice);
+        if (request.getBuyNowPrice() != null) session.setBuyNowPrice(request.getBuyNowPrice());
+        validatePriceLogic(session);
+        session.setUpdatedAt(LocalDateTime.now());
+        AuctionSession savedSession = auctionSessionRepository.save(session);
+
+        if (paymentUrl != null) {
+            return CreateAuctionSessionResponse.builder()
+                    .message("Cập nhật thành công. Vui lòng thanh toán phí bổ sung: " + additionalFee + " VND")
+                    .paymentUrl(paymentUrl)
+                    .sessionDetails(auctionSessionMapper.toAuctionSessionResponse(savedSession))
+                    .build();
+        } else {
+            return CreateAuctionSessionResponse.builder()
+                    .message("Cập nhật phiên đấu giá thành công.")
+                    .sessionDetails(auctionSessionMapper.toAuctionSessionResponse(savedSession))
+                    .build();
+        }
     }
 
     //================= ADMIN METHODS =====================

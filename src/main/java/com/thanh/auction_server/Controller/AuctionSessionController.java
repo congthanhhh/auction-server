@@ -4,6 +4,7 @@ import com.thanh.auction_server.constants.AuctionStatus;
 import com.thanh.auction_server.dto.request.AdminUpdateSessionRequest;
 import com.thanh.auction_server.dto.request.AuctionSessionAdminSearchRequest;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
+import com.thanh.auction_server.dto.request.UpdateAuctionSessionRequest;
 import com.thanh.auction_server.dto.response.*;
 import com.thanh.auction_server.service.auction.AuctionSessionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -109,6 +110,14 @@ public class AuctionSessionController {
         return ResponseEntity.ok(auctionSessionService.reactivateAuctionSession(id));
     }
 
+    @PutMapping("/update{id}")
+    public ResponseEntity<CreateAuctionSessionResponse> updateSessionByUser(
+            @PathVariable Long id,
+            @RequestBody UpdateAuctionSessionRequest request,
+            HttpServletRequest httpRequest // Thêm cái này
+    ) {
+        return ResponseEntity.ok(auctionSessionService.updateAuctionSessionByUser(id, request, httpRequest));
+    }
 
 //    ============= Admin =============
 

@@ -86,8 +86,8 @@ public class BidService {
         LocalDateTime now = LocalDateTime.now();
         var session = auctionSessionRepository.findByIdWithLock(auctionSessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND));
-        Product product = session.getProduct();
 
+        Product product = session.getProduct();
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         var bidder = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND));
