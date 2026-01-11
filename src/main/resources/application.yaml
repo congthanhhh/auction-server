@@ -51,7 +51,7 @@ cloudinary:
   api_secret: "${CLOUDINARY_API_SECRET}"
 
 socket:
-  host: 0.0.0.0 #localhost
+  host: 0.0.0.0
   port: 9092
 
 payment:
