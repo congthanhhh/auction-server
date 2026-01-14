@@ -7,7 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface BidRepository extends JpaRepository<Bid, Long> {
     // Tìm tất cả các bid của một phiên đấu giá, sắp xếp theo thời gian (mới nhất trước)
@@ -24,6 +26,10 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
 
     @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Bid b WHERE b.auctionSession.product.id = :productId")
     boolean existsBidsByProductId(@Param("productId") Long productId);
+
+    // Trong BidRepository.java
+    @Query("SELECT MAX(b.bidTime) FROM Bid b WHERE b.auctionSession.id = :sessionId AND b.user.id = :userId")
+    Optional<LocalDateTime> findLastBidTimeBySessionAndUser(Long sessionId, String userId);
 
 
 }

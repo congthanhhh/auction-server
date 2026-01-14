@@ -10,6 +10,7 @@ public final class Endpoints {
             "auction-sessions/**",
             "/feedback/**",
             "users/{userId}/profile",
+
     };
 
     public static final String[] PUBLIC_POST_ENDPOINTS = {

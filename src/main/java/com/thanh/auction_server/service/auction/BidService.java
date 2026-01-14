@@ -33,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -92,6 +93,17 @@ public class BidService {
         var bidder = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.USER_NOT_FOUND));
 
+        //================== GIỚI HẠN TẦN SUẤT ĐẶT GIÁ ==================
+        int cooldownSeconds = 10;
+        Optional<LocalDateTime> lastUserBidTimeOpt = bidRepository.findLastBidTimeBySessionAndUser(session.getId(), bidder.getId());
+        if (lastUserBidTimeOpt.isPresent()) {
+            LocalDateTime allowedNextBidTime = lastUserBidTimeOpt.get().plusSeconds(cooldownSeconds);
+            if (LocalDateTime.now().isBefore(allowedNextBidTime)) {
+                long secondsLeft = java.time.Duration.between(LocalDateTime.now(), allowedNextBidTime).getSeconds();
+                throw new DataConflictException("Bạn thao tác quá nhanh. Vui lòng chờ " + (secondsLeft + 1) + " giây nữa.");
+            }
+        }
+        //================================================================
         final int MAX_STRIKES_ALLOWED = 2;
         if (bidder.getStrikeCount() != null && bidder.getStrikeCount() >= MAX_STRIKES_ALLOWED) {
             log.warn("User {} (Strikes: {}) bị chặn đặt giá.", bidder.getUsername(), bidder.getStrikeCount());
@@ -173,15 +185,9 @@ public class BidService {
                 if (reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0) {
                     if (newPrice.compareTo(reservePrice) < 0) {
                         newPrice = reservePrice;
-//                        reserveMetTrigger = true;
                         reserveMetNow = true;
                     }
                 }
-//                if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0 && reservePrice != null && newMaxBid.compareTo(reservePrice) >= 0) {
-//                    newPrice = reservePrice;
-//                } else if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {
-//                    newPrice = session.getStartPrice();
-//                }
 
                 if (currentHighestMaxBid.compareTo(BigDecimal.ZERO) == 0) {
                     boolean hasRealReserve = reservePrice != null && reservePrice.compareTo(BigDecimal.ZERO) > 0;
