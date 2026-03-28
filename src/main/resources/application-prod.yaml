@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: "${DB_URL}"
-    username: ${DB_USER}
-    password: "${DB_PASS}"
+    url: "${AUCTION_DB_URL}"
+    username: ${AUCTION_DB_USER}
+    password: "${AUCTION_DB_PASS}"
   data:
     redis:
       host: ${RD_HOST}

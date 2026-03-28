@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8081
   servlet:
     context-path: /api/v1
 
@@ -31,8 +31,8 @@ spring:
   mail:
     host: "smtp.gmail.com"
     port: 587
-    username: "${EMAIL_USERNAME}"
-    password: "${EMAIL_PASSWORD}"
+    username: "${AUCTION_EMAIL_USER}"
+    password: "${AUCTION_EMAIL_PASS}"
     properties:
       mail:
         smtp:
@@ -41,14 +41,14 @@ spring:
             enable: true
 
 jwt:
-  signerKey: "${JWT_SIGNER_KEY}"
-  valid-duration: 3600 #180 in second (1 hour)
+  signerKey: "${AUCTION_JWT_SIGNER_KEY}"
+  valid-duration: 3600 #(1 hour)
   refreshable-duration: 604800 # in second (7 days)
 
 cloudinary:
   cloud_name: "dc7nlgj8t"
-  api_key: "${CLOUDINARY_API_KEY}"
-  api_secret: "${CLOUDINARY_API_SECRET}"
+  api_key: "${CLOUDINARY_KEY}"
+  api_secret: "${CLOUDINARY_SECRET}"
 
 socket:
   host: 0.0.0.0
