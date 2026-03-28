@@ -8,6 +8,7 @@ spring:
     active: prod
   jpa:
     hibernate:
+      database-platform: org.hibernate.dialect.MySQL8Dialect
       ddl-auto: update
     show-sql: true
   security:
