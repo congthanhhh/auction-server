@@ -5,8 +5,8 @@ spring:
     password: "${AUCTION_DB_PASS}"
   data:
     redis:
-      host: ${RD_HOST}
-      port: ${RD_PORT}
+      host: "${RD_HOST}"
+      port: "${RD_PORT}"
       username: default
       password: "${RD_PASS}"
       ssl:
