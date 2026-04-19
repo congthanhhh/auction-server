@@ -110,7 +110,7 @@ public class AuctionSessionController {
         return ResponseEntity.ok(auctionSessionService.reactivateAuctionSession(id));
     }
 
-    @PutMapping("/update{id}")
+    @PutMapping("/update/{id}")
     public ResponseEntity<CreateAuctionSessionResponse> updateSessionByUser(
             @PathVariable Long id,
             @RequestBody UpdateAuctionSessionRequest request,

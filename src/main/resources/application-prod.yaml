@@ -12,7 +12,6 @@ spring:
       ssl:
         enabled: true
 
-
   security:
     oauth2:
       client:
@@ -20,6 +19,11 @@ spring:
           google:
             redirect-uri: "https://auction-ct03.netlify.app/authenticate"
 
+
 payment:
   vnPay:
+    url: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+    tmnCode: "${VNPAY_TMN_CODE}"
+    hashSecret: "${VNPAY_HASH_SECRET}"
     returnUrl: "https://auction-ct03.netlify.app/payment-result"
+    transactionUrl: "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction"

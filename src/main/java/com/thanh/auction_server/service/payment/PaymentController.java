@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
     private final PaymentService paymentService;
 
-    //Tạo URL thanh toán
+    //Tạo URL thanh toán THU SUA POSTMMAPPING
     @GetMapping("/vn-pay")
     public ResponseEntity<String> createPayment(
             HttpServletRequest request,
