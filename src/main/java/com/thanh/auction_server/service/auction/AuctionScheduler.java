@@ -21,7 +21,6 @@ public class AuctionScheduler {
 
     @Scheduled(fixedRate = 30000) // 30 giây
     public void startScheduledAuctionsJob() {
-        log.debug("Scheduler: Running job to start scheduled auctions...");
         try {
             // Nhận danh sách các phiên vừa BẮT ĐẦU
             List<AuctionSession> startedSessions = auctionSessionService.startScheduledAuctions();
@@ -33,7 +32,6 @@ public class AuctionScheduler {
                         SocketIOService.EVENT_STATUS_CHANGE,
                         Map.of("status", session.getStatus().name()) // Gửi trạng thái "ACTIVE"
                 );
-                log.info("Scheduler: Đã bắt đầu phiên {} và gửi WebSocket.", session.getId());
             }
         } catch (Exception e) {
             log.error("Scheduler: Error during startScheduledAuctionsJob", e);
@@ -42,7 +40,6 @@ public class AuctionScheduler {
 
     @Scheduled(fixedRate = 30000) // 30 giây
     public void endActiveAuctionsJob() {
-        log.debug("Scheduler: Running job to end active auctions...");
         try {
             // Nhận danh sách các phiên vừa KẾT THÚC
             List<AuctionSession> endedSessions = auctionSessionService.endActiveAuctions();
@@ -62,7 +59,6 @@ public class AuctionScheduler {
                 );
 
                 socketIOService.sendMessageToRoom(roomName, SocketIOService.EVENT_AUCTION_ENDED, finalResult);
-                log.info("Scheduler: Đã kết thúc phiên {} và gửi WebSocket.", session.getId());
             }
         } catch (Exception e) {
             log.error("Scheduler: Error during endActiveAuctionsJob", e);

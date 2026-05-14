@@ -8,7 +8,6 @@ import com.thanh.auction_server.entity.Role;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.constants.ErrorMessage;
 import com.thanh.auction_server.exception.*;
-import com.thanh.auction_server.mapper.ProductMapper;
 import com.thanh.auction_server.mapper.UserMapper;
 import com.thanh.auction_server.repository.*;
 import com.thanh.auction_server.service.admin.AuditLogService;
@@ -31,7 +30,6 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -45,9 +43,6 @@ public class UserService {
     RefreshTokenRepository refreshTokenRepository;
     OtpService otpService;
     EmailService emailService;
-    FeedbackRepository feedbackRepository;
-    ProductMapper productMapper;
-    ProductRepository productRepository;
     AuditLogService auditLogService;
 
     public UserResponse createUser(UserCreationRequest request) {

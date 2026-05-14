@@ -5,7 +5,6 @@ import com.cloudinary.utils.ObjectUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,7 +13,6 @@ import java.util.Map;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Slf4j
 @Service
 public class CloudinaryService {
     Cloudinary cloudinary;
@@ -25,14 +23,11 @@ public class CloudinaryService {
                 "folder", "auction_web"
         );
         Map uploadResult = cloudinary.uploader().upload(file.getBytes(), params);
-        log.info("File uploaded successfully to folder 'auction-product-images': {}", uploadResult.get("secure_url"));
         return uploadResult;
     }
 
     public Map delete(String publicId) throws IOException {
-        log.warn("Deleting image with public_id '{}' from Cloudinary", publicId);
         Map deleteResult = cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
-        log.info("Image deletion result: {}", deleteResult);
         return deleteResult;
     }
 }

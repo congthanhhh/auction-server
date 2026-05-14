@@ -1,7 +1,6 @@
 package com.thanh.auction_server.service.auction;
 
 import com.thanh.auction_server.constants.ErrorMessage;
-import com.thanh.auction_server.dto.request.NotificationRequest;
 import com.thanh.auction_server.dto.response.NotificationResponse;
 import com.thanh.auction_server.dto.response.PageResponse;
 import com.thanh.auction_server.entity.Notification;
@@ -49,7 +48,6 @@ public class NotificationService {
                 .build();
 
         Notification savedNotification = notificationRepository.save(notification);
-        log.info("Notification saved for user {}: {}", user.getUsername(), message);
         // Gọi WebSocket để gửi thông báo real-time
         String userRoom = "user-" + user.getId();
         NotificationResponse notificationResponse = notificationMapper.toNotificationResponse(savedNotification);
@@ -58,7 +56,6 @@ public class NotificationService {
                 SocketIOService.EVENT_NEW_NOTIFICATION,
                 notificationResponse);
 
-        log.info("Sent WebSocket ping (new_notification) to room: {}", userRoom);
     }
 
     public PageResponse<NotificationResponse> getMyNotifications(int page, int size) {
@@ -112,7 +109,6 @@ public class NotificationService {
         for (User admin : admins) {
             createNotification(admin, message, link);
         }
-        log.info("Sent notification to {} admins: {}", admins.size(), message);
     }
 
 }

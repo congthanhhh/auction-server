@@ -1,8 +1,6 @@
 package com.thanh.auction_server.dto.request;
 
 import com.thanh.auction_server.constants.FeedbackRating;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

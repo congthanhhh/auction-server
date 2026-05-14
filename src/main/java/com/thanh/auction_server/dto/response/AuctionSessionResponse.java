@@ -1,7 +1,6 @@
 package com.thanh.auction_server.dto.response;
 
 import com.thanh.auction_server.constants.AuctionStatus;
-import jakarta.validation.constraints.Future;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 

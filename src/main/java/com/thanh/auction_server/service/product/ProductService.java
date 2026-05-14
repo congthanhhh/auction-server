@@ -68,7 +68,6 @@ public class ProductService {
         product.setIsActive(true);
         product.setStatus(ProductStatus.WAITING_FOR_APPROVAL);
         product.setImages(new HashSet<>());
-        Set<Image> imagesToAssociate = new HashSet<>();
         if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
             List<Image> foundImages = imageRepository.findAllById(request.getImageIds());
             if (foundImages.size() != request.getImageIds().size()) {
@@ -76,8 +75,7 @@ public class ProductService {
                         request.getImageIds(),
                         foundImages.stream().map(Image::getId).collect(Collectors.toList()));
             }
-            imagesToAssociate.addAll(foundImages);
-            product.getImages().addAll(imagesToAssociate);
+            product.getImages().addAll(foundImages);
         }
 
         var savedProduct = productRepository.save(product);
@@ -160,7 +158,6 @@ public class ProductService {
                     .filter(img -> request.getImageIdsToRemove().contains(img.getId()))
                     .toList();
             if (!imagesToRemove.isEmpty()) {
-                log.info("Removing {} images from product ID {}", imagesToRemove.size(), id);
                 imagesToRemove.forEach(imagesCurrentlyAssociated::remove); // Xóa khỏi collection
 //                imagesCurrentlyAssociated.removeAll(imagesToRemove);
 
@@ -175,18 +172,11 @@ public class ProductService {
         }
         // Xử lý Thêm Ảnh Mới (imageIdsToAdd)
         if (request.getImageIdsToAdd() != null && !request.getImageIdsToAdd().isEmpty()) {
-            // Kiểm tra giới hạn số lượng ảnh (nếu đã implement)
-            int currentImageCount = existingProduct.getImages().size();
-            int imagesToAddCount = request.getImageIdsToAdd().size();
-            // if (currentImageCount + imagesToAddCount > maxImageCount) {
-            //     throw new UserNotFoundException("Thêm ảnh mới sẽ vượt quá giới hạn " + maxImageCount);
-            // }
             List<Image> imagesToAdd = imageRepository.findAllById(request.getImageIdsToAdd());
             if (imagesToAdd.size() != request.getImageIdsToAdd().size()) {
                 log.warn("Some image IDs provided for addition were not found.");
             }
             if (!imagesToAdd.isEmpty()) {
-                log.info("Adding {} new images to product ID {}", imagesToAdd.size(), id);
                 existingProduct.getImages().addAll(imagesToAdd);
             }
         }
@@ -337,8 +327,6 @@ public class ProductService {
                     .toList();
 
             if (!imagesToRemove.isEmpty()) {
-                log.info("Removing {} images from product ID {}", imagesToRemove.size(), product.getId());
-
                 // Quan trọng: Xóa khỏi Set của Product trước để Hibernate không hiểu lầm
                 imagesToRemove.forEach(imagesCurrentlyAssociated::remove);
 
@@ -357,7 +345,6 @@ public class ProductService {
             List<Image> imagesToAdd = imageRepository.findAllById(request.getImageIdsToAdd());
 
             if (!imagesToAdd.isEmpty()) {
-                log.info("Adding {} new images to product ID {}", imagesToAdd.size(), product.getId());
                 // Gán Product cho Image (nếu quan hệ 2 chiều) hoặc add vào Set
                 // Vì CascadeType.ALL, việc add vào Set sẽ tự động update FK
                 product.getImages().addAll(imagesToAdd);

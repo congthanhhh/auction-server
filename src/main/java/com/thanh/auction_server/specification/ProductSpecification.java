@@ -1,11 +1,7 @@
 package com.thanh.auction_server.specification;
 
-import com.thanh.auction_server.constants.AuctionStatus;
 import com.thanh.auction_server.dto.request.ProductSearchRequest;
-import com.thanh.auction_server.entity.AuctionSession;
 import com.thanh.auction_server.entity.Product;
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;

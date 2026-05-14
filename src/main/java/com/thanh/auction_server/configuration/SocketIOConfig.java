@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.stereotype.Component;
 
 @Configuration
 @Slf4j
@@ -54,7 +53,6 @@ public class SocketIOConfig {
 
                 if (response.isValid()) {
                     // Token hợp lệ, cho phép kết nối
-                    log.info("Socket.IO: Client đã xác thực thành công (token hợp lệ).");
                     return new AuthorizationResult(true);
                 } else {
                     log.warn("Socket.IO: Client bị từ chối, token không hợp lệ.");

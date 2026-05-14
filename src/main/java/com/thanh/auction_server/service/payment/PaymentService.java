@@ -13,10 +13,8 @@ import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.repository.AddressRepository;
 import com.thanh.auction_server.repository.AuctionSessionRepository;
 import com.thanh.auction_server.repository.InvoiceRepository;
-import com.thanh.auction_server.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,12 +30,10 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class PaymentService {
     private final VnPayConfig vnPayConfig;
     private final InvoiceRepository invoiceRepository;
     private final AddressRepository addressRepository;
-    private final UserRepository userRepository;
     private final AuctionSessionRepository auctionSessionRepository;
 
     // 1. TẠO URL THANH TOÁN
@@ -110,15 +106,11 @@ public class PaymentService {
                 // Build hash data
                 hashData.append(fieldName);
                 hashData.append('=');
-                try {
-                    hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
-                    // Build query
-                    query.append(URLEncoder.encode(fieldName, StandardCharsets.US_ASCII.toString()));
-                    query.append('=');
-                    query.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
-                } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
-                }
+                hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
+                // Build query
+                query.append(URLEncoder.encode(fieldName, StandardCharsets.US_ASCII));
+                query.append('=');
+                query.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
                 if (itr.hasNext()) {
                     query.append('&');
                     hashData.append('&');
@@ -270,22 +262,19 @@ public class PaymentService {
         String jsonBody = mapper.writeValueAsString(vnp_Params);
 
         try (OutputStream os = connection.getOutputStream()) {
-            byte[] input = jsonBody.getBytes("utf-8");
+            byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
             os.write(input, 0, input.length);
         }
 
         // 5. Đọc Response
-        int responseCode = connection.getResponseCode();
-        log.info("VNPay Refund Response Code: " + responseCode);
+        connection.getResponseCode();
 
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream(), "utf-8"))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
             StringBuilder response = new StringBuilder();
             String responseLine;
             while ((responseLine = br.readLine()) != null) {
                 response.append(responseLine.trim());
             }
-            log.info("VNPay Refund Response Body: {}", response.toString());
-
             // Parse response JSON để check code "00"
             // JsonNode jsonNode = mapper.readTree(response.toString());
             // String resCode = jsonNode.get("vnp_ResponseCode").asText();
@@ -306,11 +295,7 @@ public class PaymentService {
                 // Build hash data
                 hashData.append(fieldName);
                 hashData.append('=');
-                try {
-                    hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
-                } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
-                }
+                hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
                 if (itr.hasNext()) {
                     hashData.append('&');
                 }

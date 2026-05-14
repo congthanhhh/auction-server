@@ -1,6 +1,5 @@
 package com.thanh.auction_server.dto.request;
 
-import com.thanh.auction_server.constants.AuctionStatus;
 import com.thanh.auction_server.constants.InvoiceStatus;
 import com.thanh.auction_server.constants.InvoiceType;
 import lombok.Data;

@@ -2,15 +2,11 @@ package com.thanh.auction_server.dto.response;
 
 import com.thanh.auction_server.constants.ProductStatus;
 import com.thanh.auction_server.entity.Image;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Set;
 
 @Data

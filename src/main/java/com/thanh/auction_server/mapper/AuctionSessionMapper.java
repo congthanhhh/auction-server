@@ -3,14 +3,9 @@ package com.thanh.auction_server.mapper;
 import com.thanh.auction_server.dto.request.AuctionSessionRequest;
 import com.thanh.auction_server.dto.response.AdminAuctionSessionResponse;
 import com.thanh.auction_server.dto.response.AuctionSessionResponse;
-import com.thanh.auction_server.dto.response.SimpleProductResponse;
-import com.thanh.auction_server.dto.response.SimpleUserResponse;
 import com.thanh.auction_server.entity.AuctionSession;
-import com.thanh.auction_server.entity.Product;
-import com.thanh.auction_server.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @Mapper(componentModel = "spring", uses = {UserMapper.class, ProductMapper.class})

@@ -21,14 +21,12 @@ import com.thanh.auction_server.repository.UserRepository;
 import com.thanh.auction_server.service.admin.AuditLogService;
 import com.thanh.auction_server.service.admin.SystemParameterService;
 import com.thanh.auction_server.service.invoice.InvoiceService;
-import com.thanh.auction_server.service.payment.PaymentResponse;
 import com.thanh.auction_server.service.payment.PaymentService;
 import com.thanh.auction_server.specification.AuctionSpecification;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,7 +43,6 @@ import java.util.List;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Slf4j
 @Service
 public class AuctionSessionService {
     AuctionSessionRepository auctionSessionRepository;
@@ -268,7 +265,6 @@ public class AuctionSessionService {
 
     // Lấy chi tiết một phiên đấu giá
     public AuctionSessionResponse getAuctionSessionById(Long id) {
-        log.info("Fetching auction session with ID: {}", id);
         AuctionSession session = auctionSessionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorMessage.AUCTION_SESSION_NOT_FOUND + id));
         return auctionSessionMapper.toAuctionSessionResponse(session);
@@ -281,7 +277,6 @@ public class AuctionSessionService {
         List<AuctionSession> sessionsToStart = auctionSessionRepository
                 .findByStatusAndStartTimeLessThanEqual(AuctionStatus.SCHEDULED, now);
         if (!sessionsToStart.isEmpty()) {
-            log.info("Found {} auction sessions to start.", sessionsToStart.size());
             for (AuctionSession session : sessionsToStart) {
                 session.setStatus(AuctionStatus.ACTIVE);
                 session.setUpdatedAt(now);
@@ -338,8 +333,6 @@ public class AuctionSessionService {
         List<AuctionSession> sessionsToEnd = auctionSessionRepository
                 .findByStatusAndEndTimeLessThanEqual(AuctionStatus.ACTIVE, now);
         for (AuctionSession session : sessionsToEnd) {
-            // 3. TÁCH BIẾN ĐỂ BIẾT TRẠNG THÁI TRƯỚC VÀ SAU
-            AuctionStatus statusBefore = session.getStatus();
             determineWinnerAndSetStatus(session); // Logic xác định người thắng
             session.setUpdatedAt(LocalDateTime.now());
             auctionSessionRepository.save(session);

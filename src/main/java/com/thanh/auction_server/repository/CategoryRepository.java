@@ -1,7 +1,6 @@
 package com.thanh.auction_server.repository;
 
 import com.thanh.auction_server.entity.Category;
-import com.thanh.auction_server.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

@@ -39,7 +39,6 @@ public class EmailService {
             helper.setText(htmlContent, true);
 
             javaMailSender.send(mimeMessage);
-            log.info("HTML OTP email sent successfully to {}", to);
         } catch (MessagingException e) {
             log.error("Error while sending HTML OTP email to {}: {}", to, e.getMessage());
         }

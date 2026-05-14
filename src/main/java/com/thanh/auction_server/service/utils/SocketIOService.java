@@ -5,13 +5,9 @@ import com.nimbusds.jwt.SignedJWT;
 import com.thanh.auction_server.entity.User;
 import com.thanh.auction_server.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import java.text.ParseException;
 
 @Service
 @RequiredArgsConstructor
@@ -35,24 +31,14 @@ public class SocketIOService {
     @PostConstruct
     private void addEventListeners() {
 
-        server.addConnectListener(client -> {
-            log.info("Socket.IO Client đã kết nối: {}", client.getSessionId());
-            // Tại đây bạn có thể lấy token và log ra user nào vừa kết nối nếu muốn
-        });
-        server.addDisconnectListener(client -> {
-            log.info("Socket.IO Client đã ngắt kết nối: {}", client.getSessionId());
-        });
-
         // Join Room Phiên đấu giá (Công khai)
         server.addEventListener(EVENT_JOIN_SESSION_ROOM, String.class, (client, roomName, ackRequest) -> {
             client.joinRoom(roomName);
-            log.info("Client {} join room phiên: {}", client.getSessionId(), roomName);
         });
 
         // Leave Room Phiên đấu giá
         server.addEventListener(EVENT_LEAVE_SESSION_ROOM, String.class, (client, roomName, ackRequest) -> {
             client.leaveRoom(roomName);
-            log.info("Client {} leave room phiên: {}", client.getSessionId(), roomName);
         });
 
         // Join Room Cá nhân (Bảo mật - Tự động xác định user từ Token)
@@ -67,7 +53,6 @@ public class SocketIOService {
                     if (user != null) {
                         String userRoom = "user-" + user.getId();
                         client.joinRoom(userRoom);
-                        log.info("Client {} (User: {}) đã vào phòng cá nhân: {}", client.getSessionId(), username, userRoom);
                     }
                 }
             } catch (Exception e) {
@@ -77,7 +62,6 @@ public class SocketIOService {
     }
 
     public void sendMessageToRoom(String room, String eventName, Object data) {
-        log.debug("Gửi sự kiện '{}' đến phòng '{}'", eventName, room);
         server.getRoomOperations(room).sendEvent(eventName, data);
     }
 }

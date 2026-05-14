@@ -1,6 +1,5 @@
 package com.thanh.auction_server.service.admin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thanh.auction_server.constants.LogAction;
 import com.thanh.auction_server.constants.SystemConfigKey;
 import com.thanh.auction_server.entity.SystemParameter;
@@ -22,7 +21,6 @@ import java.util.List;
 @Service
 public class SystemParameterService {
     SystemParameterRepository parameterRepository;
-    ObjectMapper objectMapper;
     AuditLogService auditLogService;
 
     // Chạy hàm này khi khởi động App để đảm bảo DB luôn có dữ liệu
@@ -40,7 +38,6 @@ public class SystemParameterService {
                     .paramValue(defaultValue)
                     .description(desc)
                     .build());
-            log.info("Initialized system parameter: {}", key);
         }
     }
 

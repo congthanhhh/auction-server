@@ -1,9 +1,7 @@
 package com.thanh.auction_server.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.thanh.auction_server.constants.AuctionStatus;
 import jakarta.validation.constraints.Future;
-import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 

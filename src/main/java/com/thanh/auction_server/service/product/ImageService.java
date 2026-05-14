@@ -38,7 +38,6 @@ public class ImageService {
                 .publicId(publicId)
                 .build();
         Image savedImage = imageRepository.save(image);
-        log.info("Image saved to DB with ID: {} and Public ID: {}", savedImage.getId(), savedImage.getPublicId());
         return savedImage;
     }
 
@@ -62,6 +61,5 @@ public class ImageService {
             throw new ResourceNotFoundException("Không tìm thấy Public ID của ảnh với ID: " + imageId);
         }
         imageRepository.delete(image);
-        log.info("Image with DB ID {} deleted successfully from DB.", imageId);
     }
 }

@@ -83,8 +83,6 @@ public class InvoiceService {
                 .build();
 
         invoiceRepository.save(invoice);
-        log.info("Invoice created (ID: {}) cho người thắng {} của phiên {}", invoice.getId(), winner.getUsername(), session.getId());
-
     }
 
     @Transactional
@@ -304,7 +302,6 @@ public class InvoiceService {
         if (invoices.isEmpty()) {
             return;
         }
-        log.info("Tìm thấy {} đơn hàng SHIPPING quá 15 ngày. Đang tự động hoàn thành...", invoices.size());
         for (Invoice invoice : invoices) {
             invoice.setStatus(InvoiceStatus.COMPLETED);
 //            notificationService.createNotification(
@@ -352,12 +349,10 @@ public class InvoiceService {
         // Xử lý theo quyết định của Admin
         if (request.getDecision() == DisputeDecision.REFUND_TO_BUYER) {
             // A. BUYER THẮNG
-            log.info("Bắt đầu quy trình hoàn tiền cho Invoice ID: {}", invoice.getId());
             invoice.setStatus(InvoiceStatus.REFUNDED);
             dispute.setDecision(DisputeDecision.REFUND_TO_BUYER);
             try {
                 paymentService.refundTransaction(invoice.getId());
-                log.info("Gọi API hoàn tiền thành công");
             } catch (Exception e) {
                 throw new RuntimeException("Không thể hoàn tiền qua VNPay: " + e.getMessage());
             }

@@ -15,7 +15,6 @@ public class InvoiceScheduler {
     @Scheduled(cron = "0 0 0 * * *")
 //     @Scheduled(fixedRate = 60000) // Chạy mỗi 1 phút để test
     public void autoFinishInvoicesJob() {
-        log.info("Scheduler: Bắt đầu quét các đơn hàng shipping quá hạn...");
         try {
             invoiceService.autoFinishInvoices();
         } catch (Exception e) {

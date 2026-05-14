@@ -10,7 +10,6 @@ import com.thanh.auction_server.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -20,7 +19,6 @@ import java.time.YearMonth;
 
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Slf4j
 @Service
 public class StatisticService {
     InvoiceRepository invoiceRepository;
@@ -29,8 +27,6 @@ public class StatisticService {
     AuctionSessionRepository auctionSessionRepository;
 
     private static final BigDecimal COMMISSION_RATE = new BigDecimal("0.10");
-//    BigDecimal feePercent = systemParameterService.getBigDecimalConfig(SystemConfigKey.COMMISSION_RATE_FEE);
-//    BigDecimal COMMISSION_RATE = feePercent;
 
     public StatisticResponse getDashboardStatistics(Integer month, Integer year) {
         LocalDateTime startDate = null;

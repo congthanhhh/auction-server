@@ -7,7 +7,6 @@ import com.thanh.auction_server.dto.response.IntrospectResponse;
 import com.thanh.auction_server.dto.response.MessageResponse;
 import com.thanh.auction_server.exception.UnauthorizedException;
 import com.thanh.auction_server.service.authenticate.AuthenticationService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
