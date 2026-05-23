@@ -1,0 +1,5095 @@
+openapi: 3.0.0
+info:
+  title: API hệ thống đấu giá trực tuyến
+  description: |
+    Tài liệu API cho backend đấu giá trực tuyến `auction-server`.
+    Hệ thống hỗ trợ đăng ký, xác thực JWT, quản lý sản phẩm, tạo phiên đấu giá, đặt giá proxy/max-bid, lập hóa đơn, thanh toán VNPay, vận chuyển, khiếu nại và đánh giá uy tín.
+    Sản phẩm phải được duyệt trước khi tạo phiên đấu giá; mỗi sản phẩm chỉ có một phiên đấu giá.
+    Phiên đấu giá có giá sàn cần thanh toán hóa đơn `LISTING_FEE` trước khi được lên lịch, còn hóa đơn `AUCTION_SALE` cần snapshot địa chỉ trước khi thanh toán.
+  version: 0.0.1-SNAPSHOT
+  contact:
+    name: Auction Server Team
+
+servers:
+  - url: https://mnisthanh.page/auction/api/v1
+    description: Production server
+  - url: http://localhost:8080/api/v1
+    description: Dev server
+
+tags:
+  - name: Xác thực
+    description: Đăng nhập, refresh token, OTP, Google OAuth và đăng xuất.
+  - name: Người dùng
+    description: Quản lý tài khoản, hồ sơ cá nhân, mật khẩu và thao tác admin với người dùng.
+  - name: Sản phẩm
+    description: Quản lý sản phẩm, tìm kiếm, duyệt sản phẩm và trạng thái sản phẩm.
+  - name: Phiên đấu giá
+    description: Tạo, cập nhật, hủy, kích hoạt lại và tra cứu phiên đấu giá.
+  - name: Đặt giá
+    description: Đặt giá max/proxy bid và xem lịch sử bid.
+  - name: Hóa đơn
+    description: Hóa đơn mua hàng, phí niêm yết, giao hàng, xác nhận, khiếu nại và dashboard người bán.
+  - name: Thanh toán
+    description: Tạo URL thanh toán VNPay và xử lý callback.
+  - name: Địa chỉ
+    description: Quản lý địa chỉ giao hàng của người dùng.
+  - name: Feedback
+    description: Đánh giá giao dịch và hồ sơ uy tín công khai.
+  - name: Thông báo
+    description: Danh sách thông báo, đánh dấu đã đọc và số thông báo chưa đọc.
+  - name: Danh mục
+    description: Quản lý danh mục sản phẩm.
+  - name: Phân quyền
+    description: Quản lý role và permission.
+  - name: Admin
+    description: Thống kê, cấu hình hệ thống, nhật ký audit và tra cứu nghiệp vụ cho admin.
+  - name: Hình ảnh
+    description: Upload và xóa hình ảnh qua Cloudinary.
+
+paths:
+  /auth/authenticate:
+    post:
+      summary: Đăng nhập bằng tài khoản nội bộ
+      description: |
+        Xác thực bằng `username` hoặc `email` và `password`.
+        Khi thành công, response trả về `accessToken`; `refreshToken` được đặt vào cookie HTTP-only `refresh_token` và không trả trực tiếp trong body.
+      operationId: authenticate
+      tags: [Xác thực]
+      requestBody:
+        required: true
+        description: Thông tin đăng nhập của người dùng.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticationRequest'
+            example:
+              username: seller01
+              password: "P@ssw0rd123"
+      responses:
+        '200':
+          description: Đăng nhập thành công, trả về JWT access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/introspect:
+    post:
+      summary: Kiểm tra hiệu lực token
+      description: Kiểm tra một JWT còn hợp lệ hay không. Endpoint này được public để client có thể tự kiểm tra trạng thái token.
+      operationId: introspectToken
+      tags: [Xác thực]
+      requestBody:
+        required: true
+        description: Token cần kiểm tra.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntrospectRequest'
+            example:
+              token: eyJhbGciOiJIUzI1NiJ9...
+      responses:
+        '200':
+          description: Trả về trạng thái hợp lệ của token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/refresh-token:
+    post:
+      summary: Làm mới access token
+      description: |
+        Đọc cookie HTTP-only `refresh_token`, kiểm tra refresh token còn hiệu lực và xoay vòng refresh token mới.
+        Nếu thiếu cookie, server trả lỗi `401`.
+      operationId: refreshToken
+      tags: [Xác thực]
+      parameters:
+        - $ref: '#/components/parameters/RefreshTokenCookie'
+      responses:
+        '200':
+          description: Làm mới token thành công; cookie `refresh_token` mới được set lại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/outbound/authenticate:
+    post:
+      summary: Đăng nhập bằng Google authorization code
+      description: |
+        Nhận `code` từ Google OAuth redirect, đổi token qua OpenFeign client và tạo tài khoản hoặc phiên đăng nhập tương ứng.
+        Luồng này là custom OAuth, không dùng Spring-managed `oauth2Login()`.
+      operationId: outboundAuthenticate
+      tags: [Xác thực]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Authorization code do Google trả về sau khi người dùng đồng ý đăng nhập.
+          schema:
+            type: string
+          example: 4/0AfJohXn...
+      responses:
+        '200':
+          description: Đăng nhập Google thành công, trả về JWT access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/verify-otp:
+    post:
+      summary: Xác minh OTP tài khoản
+      description: Xác minh OTP được gửi qua email để kích hoạt hoặc xác nhận tài khoản.
+      operationId: verifyOtp
+      tags: [Xác thực]
+      requestBody:
+        required: true
+        description: Email và mã OTP cần xác minh.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerificationRequest'
+            example:
+              email: user@example.com
+              otp: "123456"
+      responses:
+        '200':
+          description: OTP hợp lệ và tài khoản được xác minh.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      summary: Đăng xuất
+      description: |
+        Nếu có `Authorization: Bearer <token>` và cookie `refresh_token`, server thu hồi token tương ứng.
+        Cookie `refresh_token` luôn được xóa khỏi trình duyệt.
+      operationId: logout
+      tags: [Xác thực]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/RefreshTokenCookie'
+      responses:
+        '200':
+          description: Đăng xuất thành công và cookie refresh token đã được xóa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users:
+    post:
+      summary: Đăng ký người dùng
+      description: Tạo tài khoản người dùng mới. `username` không được chứa dấu hoặc khoảng trắng; tài khoản thường cần xác minh OTP trước khi hoạt động đầy đủ.
+      operationId: createUser
+      tags: [Người dùng]
+      requestBody:
+        required: true
+        description: Thông tin tài khoản cần đăng ký.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreationRequest'
+            example:
+              username: buyer01
+              password: "P@ssw0rd123"
+              firstName: An
+              lastName: Nguyen
+              email: buyer01@example.com
+              phoneNumber: "0901234567"
+      responses:
+        '200':
+          description: Tạo người dùng thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách người dùng
+      description: Lấy danh sách người dùng có phân trang. Thao tác này dành cho người dùng đã xác thực hoặc admin tùy cấu hình quyền của hệ thống.
+      operationId: getUsers
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách người dùng được phân trang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/otp:
+    post:
+      summary: Tạo tài khoản và gửi OTP
+      description: Tạo yêu cầu đăng ký, gửi OTP đến email để xác minh tài khoản.
+      operationId: createUserOtp
+      tags: [Người dùng]
+      requestBody:
+        required: true
+        description: Thông tin tài khoản dùng để tạo OTP.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreationRequest'
+      responses:
+        '200':
+          description: OTP đã được gửi đến email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/create-password:
+    post:
+      summary: Tạo mật khẩu cho tài khoản OAuth
+      description: Tạo mật khẩu nội bộ cho tài khoản chưa có mật khẩu, thường dùng sau khi đăng nhập Google.
+      operationId: createPassword
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Mật khẩu mới cần tạo.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordCreationRequest'
+            example:
+              password: "P@ssw0rd123"
+      responses:
+        '200':
+          description: Tạo mật khẩu thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/update-my-info:
+    put:
+      summary: Cập nhật thông tin cá nhân
+      description: Cập nhật họ tên, email và số điện thoại của người dùng hiện tại.
+      operationId: updateMyInfo
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin cá nhân cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật thông tin cá nhân thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{id}:
+    get:
+      summary: Lấy chi tiết người dùng theo id
+      description: Trả về thông tin người dùng theo `id`. Endpoint yêu cầu JWT.
+      operationId: getUserById
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Thông tin người dùng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/my-info:
+    get:
+      summary: Lấy thông tin người dùng hiện tại
+      description: Trả về thông tin tài khoản đang đăng nhập dựa trên JWT.
+      operationId: getMyInfo
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Thông tin người dùng hiện tại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/delete/{id}:
+    delete:
+      summary: Xóa người dùng
+      description: Xóa người dùng theo `id`. Response trả về chuỗi thông báo thành công.
+      operationId: deleteUser
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Xóa người dùng thành công.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/change-password:
+    post:
+      summary: Đổi mật khẩu
+      description: Đổi mật khẩu cho người dùng hiện tại. `currentPassword` phải khớp mật khẩu đang dùng.
+      operationId: changePassword
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Mật khẩu hiện tại và mật khẩu mới.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassRequest'
+      responses:
+        '200':
+          description: Đổi mật khẩu thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/forgot-password:
+    post:
+      summary: Yêu cầu quên mật khẩu
+      description: Gửi OTP đặt lại mật khẩu đến email đã đăng ký.
+      operationId: forgotPassword
+      tags: [Người dùng]
+      requestBody:
+        required: true
+        description: Email cần gửi OTP đặt lại mật khẩu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPassRequest'
+      responses:
+        '200':
+          description: OTP đặt lại mật khẩu đã được gửi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/reset-password:
+    post:
+      summary: Đặt lại mật khẩu
+      description: Đặt lại mật khẩu bằng email, OTP hợp lệ và mật khẩu mới.
+      operationId: resetPassword
+      tags: [Người dùng]
+      requestBody:
+        required: true
+        description: Thông tin đặt lại mật khẩu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPassRequest'
+      responses:
+        '200':
+          description: Đặt lại mật khẩu thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/my-profile:
+    get:
+      summary: Lấy hồ sơ cá nhân mở rộng
+      description: Trả về hồ sơ cá nhân của người dùng hiện tại, gồm trạng thái mật khẩu, role, điểm uy tín và số strike.
+      operationId: getMyProfile
+      tags: [Người dùng]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Hồ sơ cá nhân của người dùng hiện tại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{userId}/public-profile:
+    get:
+      summary: Lấy hồ sơ công khai người dùng
+      description: Trả về hồ sơ công khai, dùng cho trang người bán hoặc người tham gia đấu giá. Không trả email hoặc số điện thoại.
+      operationId: getPublicUserProfile
+      tags: [Người dùng]
+      parameters:
+        - $ref: '#/components/parameters/UserIdNamed'
+      responses:
+        '200':
+          description: Hồ sơ công khai của người dùng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUserProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/admin/search:
+    get:
+      summary: Admin tìm kiếm người dùng
+      description: Lọc người dùng theo trạng thái hoạt động, role và kiểu sắp xếp. Dùng cho màn hình quản trị tài khoản.
+      operationId: searchUsersForAdmin
+      tags: [Admin, Người dùng]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: isActive
+          in: query
+          description: Lọc theo trạng thái hoạt động của tài khoản.
+          schema:
+            type: boolean
+        - name: role
+          in: query
+          description: Lọc theo tên role, ví dụ `ADMIN`, `USER`.
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: Kiểu sắp xếp, mặc định `newest`.
+          schema:
+            type: string
+            default: newest
+      responses:
+        '200':
+          description: Danh sách người dùng phù hợp bộ lọc.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/admin/{id}/active-status:
+    patch:
+      summary: Admin cập nhật trạng thái hoạt động người dùng
+      description: Khóa hoặc mở khóa tài khoản. Người dùng bị khóa không được tham gia các thao tác cần đăng nhập.
+      operationId: updateUserActiveStatus
+      tags: [Admin, Người dùng]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        description: Giá trị `true` để kích hoạt, `false` để khóa.
+        content:
+          application/json:
+            schema:
+              type: boolean
+            example: false
+      responses:
+        '200':
+          description: Cập nhật trạng thái hoạt động thành công.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/admin-create:
+    post:
+      summary: Admin tạo người dùng
+      description: Tạo tài khoản với role và trạng thái do admin chỉ định.
+      operationId: createUserByAdmin
+      tags: [Admin, Người dùng]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin tài khoản do admin tạo.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreationRequest'
+      responses:
+        '200':
+          description: Tạo người dùng bởi admin thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{userId}/admin-update:
+    put:
+      summary: Admin cập nhật người dùng
+      description: Cập nhật thông tin tài khoản, role, điểm uy tín, số strike và trạng thái hoạt động.
+      operationId: updateUserByAdmin
+      tags: [Admin, Người dùng]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdNamed'
+      requestBody:
+        required: true
+        description: Các trường người dùng cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật người dùng bởi admin thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products:
+    post:
+      summary: Tạo sản phẩm
+      description: |
+        Người bán tạo sản phẩm mới. Sản phẩm bắt đầu ở trạng thái `WAITING_FOR_APPROVAL` và chỉ sản phẩm `ACTIVE` mới được tạo phiên đấu giá.
+      operationId: createProduct
+      tags: [Sản phẩm]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin sản phẩm cần tạo.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+            example:
+              name: Đồng hồ cơ Seiko
+              description: Đồng hồ đã qua sử dụng, hoạt động tốt.
+              startPrice: 1200000
+              categoryId: 3
+              attributes: '{"brand":"Seiko","condition":"used"}'
+              imageIds: [1, 2]
+      responses:
+        '200':
+          description: Tạo sản phẩm thành công, chờ admin duyệt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách sản phẩm
+      description: Lấy danh sách sản phẩm phân trang cho client.
+      operationId: getAllProducts
+      tags: [Sản phẩm]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách sản phẩm được phân trang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/my-products:
+    get:
+      summary: Lấy sản phẩm của người bán hiện tại
+      description: Trả về toàn bộ sản phẩm thuộc người dùng đang đăng nhập.
+      operationId: getMyProducts
+      tags: [Sản phẩm]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách sản phẩm của người bán hiện tại.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/search:
+    get:
+      summary: Tìm kiếm sản phẩm cho người dùng
+      description: Lọc sản phẩm theo từ khóa, danh mục, khoảng giá, trạng thái active và sắp xếp.
+      operationId: searchProducts
+      tags: [Sản phẩm]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/ProductKeyword'
+        - $ref: '#/components/parameters/CategoryIdQuery'
+        - $ref: '#/components/parameters/MinPrice'
+        - $ref: '#/components/parameters/MaxPrice'
+        - $ref: '#/components/parameters/Sort'
+        - name: status
+          in: query
+          description: Trạng thái sản phẩm cần lọc.
+          schema:
+            $ref: '#/components/schemas/ProductStatus'
+        - name: sellerId
+          in: query
+          description: ID người bán cần lọc.
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          description: Lọc sản phẩm đang bật hoặc đã bị ẩn mềm.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Danh sách sản phẩm phù hợp bộ lọc.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/{id}:
+    get:
+      summary: Lấy chi tiết sản phẩm
+      description: Lấy thông tin chi tiết sản phẩm theo `id`.
+      operationId: getProductById
+      tags: [Sản phẩm]
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Chi tiết sản phẩm.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Cập nhật sản phẩm
+      description: Người bán cập nhật thông tin sản phẩm của mình khi nghiệp vụ cho phép.
+      operationId: updateProduct
+      tags: [Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Thông tin sản phẩm cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật sản phẩm thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      summary: Ẩn mềm sản phẩm
+      description: Đánh dấu sản phẩm không còn active. Endpoint trả `204` khi thành công.
+      operationId: deleteProductSoft
+      tags: [Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '204':
+          description: Ẩn mềm sản phẩm thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/{id}/restore:
+    patch:
+      summary: Khôi phục sản phẩm
+      description: Bật lại sản phẩm đã bị ẩn mềm.
+      operationId: restoreProduct
+      tags: [Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '204':
+          description: Khôi phục sản phẩm thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/admin/pending:
+    get:
+      summary: Admin lấy sản phẩm chờ duyệt
+      description: Lấy danh sách sản phẩm có trạng thái `WAITING_FOR_APPROVAL`.
+      operationId: getPendingProducts
+      tags: [Admin, Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách sản phẩm chờ duyệt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/admin/{id}/verify:
+    patch:
+      summary: Admin duyệt hoặc từ chối sản phẩm
+      description: |
+        Nếu `isApproved=true`, sản phẩm chuyển sang `ACTIVE` và có thể được tạo phiên đấu giá.
+        Nếu `false`, sản phẩm bị từ chối và không thể được auction.
+      operationId: verifyProduct
+      tags: [Admin, Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+        - name: isApproved
+          in: query
+          required: true
+          description: "`true` để duyệt, `false` để từ chối sản phẩm."
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Duyệt hoặc từ chối sản phẩm thành công.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/admin/search:
+    get:
+      summary: Admin tìm kiếm sản phẩm
+      description: Tìm kiếm sản phẩm cho màn hình quản trị, gồm cả trạng thái duyệt, người bán và trạng thái active.
+      operationId: searchProductsAdmin
+      tags: [Admin, Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/ProductKeyword'
+        - $ref: '#/components/parameters/CategoryIdQuery'
+        - $ref: '#/components/parameters/MinPrice'
+        - $ref: '#/components/parameters/MaxPrice'
+        - $ref: '#/components/parameters/Sort'
+        - name: status
+          in: query
+          description: Trạng thái duyệt của sản phẩm.
+          schema:
+            $ref: '#/components/schemas/ProductStatus'
+        - name: sellerId
+          in: query
+          description: ID người bán.
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          description: Trạng thái bật/tắt sản phẩm.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Danh sách sản phẩm cho admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/admin/update/{id}:
+    put:
+      summary: Admin cập nhật sản phẩm
+      description: Admin cập nhật thông tin sản phẩm, bao gồm danh mục, giá khởi điểm, thuộc tính và ảnh.
+      operationId: updateProductByAdmin
+      tags: [Admin, Sản phẩm]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Thông tin sản phẩm cần admin cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateRequest'
+      responses:
+        '200':
+          description: Admin cập nhật sản phẩm thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions:
+    post:
+      summary: Tạo phiên đấu giá
+      description: |
+        Người bán tạo phiên đấu giá cho sản phẩm đã được duyệt `ACTIVE`.
+        Mỗi sản phẩm chỉ có một phiên đấu giá. Nếu có `reservePrice`, hệ thống tạo hóa đơn `LISTING_FEE` bằng `reservePrice * LISTING_FEE_PERCENT` và phiên ở trạng thái `WAITING_PAYMENT` cho đến khi VNPay xác nhận thanh toán.
+      operationId: createAuctionSession
+      tags: [Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin phiên đấu giá cần tạo.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuctionSessionRequest'
+            example:
+              productId: 10
+              startTime: "2026-06-01T09:00:00"
+              endTime: "2026-06-01T12:00:00"
+              reservePrice: 3000000
+              buyNowPrice: 5000000
+      responses:
+        '200':
+          description: Tạo phiên đấu giá thành công; có thể kèm URL thanh toán phí niêm yết.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách phiên đấu giá
+      description: Lọc phiên đấu giá theo trạng thái và phân trang.
+      operationId: getAuctionSessions
+      tags: [Phiên đấu giá]
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái phiên đấu giá cần lọc.
+          schema:
+            $ref: '#/components/schemas/AuctionStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên đấu giá được phân trang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/my-joined:
+    get:
+      summary: Lấy phiên đấu giá đã tham gia
+      description: Trả về các phiên mà người dùng hiện tại đã đặt giá, có thể lọc theo trạng thái.
+      operationId: getMyJoinedSessions
+      tags: [Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái phiên đấu giá cần lọc.
+          schema:
+            $ref: '#/components/schemas/AuctionStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên đấu giá người dùng đã tham gia.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/seller/{sellerId}/active:
+    get:
+      summary: Lấy phiên đang hoạt động của người bán
+      description: Trả về các phiên `ACTIVE` thuộc một người bán cụ thể, dùng cho trang hồ sơ người bán.
+      operationId: getSellerActiveSessions
+      tags: [Phiên đấu giá]
+      parameters:
+        - name: sellerId
+          in: path
+          required: true
+          description: ID người bán cần xem phiên đang hoạt động.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên active của người bán.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/top-popular:
+    get:
+      summary: Lấy phiên đấu giá nổi bật
+      description: Trả về các phiên phổ biến nhất để hiển thị ở trang chủ hoặc khu vực gợi ý.
+      operationId: getTopPopularSessions
+      tags: [Phiên đấu giá]
+      responses:
+        '200':
+          description: Danh sách phiên đấu giá nổi bật.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/my-sessions:
+    get:
+      summary: Lấy phiên đấu giá của người bán hiện tại
+      description: Trả về các phiên do người dùng hiện tại tạo, có thể lọc theo trạng thái.
+      operationId: getMyAuctionSessions
+      tags: [Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái phiên đấu giá cần lọc.
+          schema:
+            $ref: '#/components/schemas/AuctionStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên của người bán hiện tại.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/{id}:
+    get:
+      summary: Lấy chi tiết phiên đấu giá
+      description: Lấy chi tiết phiên đấu giá, gồm sản phẩm, người đang giữ giá cao nhất, giá hiện tại và trạng thái đạt reserve price.
+      operationId: getAuctionSessionById
+      tags: [Phiên đấu giá]
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Chi tiết phiên đấu giá.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/active-desc:
+    get:
+      summary: Lấy phiên active mới nhất
+      description: Lấy danh sách phiên `ACTIVE` theo thứ tự mới nhất trước.
+      operationId: getActiveAuctionSessionsDesc
+      tags: [Phiên đấu giá]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên active mới nhất.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/schedule-desc:
+    get:
+      summary: Lấy phiên sắp diễn ra mới nhất
+      description: Lấy danh sách phiên `SCHEDULED` theo thứ tự mới nhất trước.
+      operationId: getScheduleAuctionSessionsDesc
+      tags: [Phiên đấu giá]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên sắp diễn ra.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/{id}/buy-now:
+    post:
+      summary: Mua ngay phiên đấu giá
+      description: |
+        Tạo hóa đơn `AUCTION_SALE` theo giá mua ngay nếu phiên còn cho phép buy-now.
+        Bid đầu tiên sẽ vô hiệu hóa buy-now; người bán không được tự mua sản phẩm của mình.
+      operationId: buyNow
+      tags: [Phiên đấu giá, Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Tạo hóa đơn mua ngay thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/{id}/cancel:
+    put:
+      summary: Người bán hủy phiên đấu giá
+      description: Hủy phiên đấu giá do người bán tạo khi nghiệp vụ cho phép. Không dùng để kết thúc tự động phiên đang chạy.
+      operationId: cancelSession
+      tags: [Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Hủy phiên đấu giá thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/{id}/reactivate:
+    put:
+      summary: Kích hoạt lại phiên đấu giá
+      description: Kích hoạt lại phiên đã bị hủy hoặc đang ở trạng thái có thể phục hồi theo rule service.
+      operationId: reactivateSession
+      tags: [Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Kích hoạt lại phiên thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/update/{id}:
+    put:
+      summary: Người bán cập nhật phiên đấu giá
+      description: Người bán cập nhật thời gian, giá khởi điểm, giá sàn hoặc giá mua ngay khi phiên còn được phép sửa.
+      operationId: updateSessionByUser
+      tags: [Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Các trường phiên đấu giá cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAuctionSessionRequest'
+      responses:
+        '200':
+          description: Cập nhật phiên đấu giá thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/admin/search:
+    get:
+      summary: Admin tìm kiếm phiên đấu giá
+      description: Tìm phiên đấu giá theo tên sản phẩm, trạng thái và sắp xếp.
+      operationId: searchAuctionSessionsForAdmin
+      tags: [Admin, Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: productName
+          in: query
+          description: Tên sản phẩm cần tìm.
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Trạng thái phiên đấu giá.
+          schema:
+            $ref: '#/components/schemas/AuctionStatus'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách phiên đấu giá cho admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAdminAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/admin/{id}:
+    put:
+      summary: Admin cập nhật phiên đấu giá
+      description: Admin cập nhật thời gian, giá, giá sàn, giá mua ngay hoặc trạng thái phiên đấu giá.
+      operationId: updateSessionForAdmin
+      tags: [Admin, Phiên đấu giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Thông tin phiên đấu giá cần admin cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateSessionRequest'
+      responses:
+        '200':
+          description: Admin cập nhật phiên đấu giá thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuctionSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/{sessionId}/bids:
+    post:
+      summary: Đặt giá cho phiên đấu giá
+      description: |
+        Đặt max/proxy bid cho phiên đang `ACTIVE`.
+        Service dùng pessimistic locking, cooldown 10 giây, bước giá theo cấu hình `BID_INCREMENT_STEPS` và logic proxy/max-bid. Người bán không được bid sản phẩm của mình; bid đầu tiên sẽ vô hiệu hóa buy-now.
+      operationId: placeBid
+      tags: [Đặt giá]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        description: Số tiền max bid người dùng muốn đặt.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BidRequest'
+            example:
+              amount: 1500000
+      responses:
+        '200':
+          description: Đặt giá thành công, trả về bid hiển thị sau khi áp dụng proxy logic.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BidResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy lịch sử bid
+      description: Trả về lịch sử bid của phiên đấu giá theo phân trang.
+      operationId: getBidHistory
+      tags: [Đặt giá]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Lịch sử bid của phiên đấu giá.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBidResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auction-sessions/count/{productId}:
+    get:
+      summary: Đếm số bid của sản phẩm
+      description: Trả về tổng số bid liên quan đến sản phẩm.
+      operationId: getBidCountByProduct
+      tags: [Đặt giá]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          description: ID sản phẩm cần đếm số bid.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Tổng số bid của sản phẩm.
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+              example: 12
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/my-invoices:
+    get:
+      summary: Lấy hóa đơn của người mua
+      description: Lấy hóa đơn liên quan đến người dùng hiện tại, có thể lọc theo trạng thái và loại hóa đơn.
+      operationId: getMyInvoices
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái hóa đơn cần lọc.
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - name: type
+          in: query
+          description: Loại hóa đơn cần lọc.
+          schema:
+            $ref: '#/components/schemas/InvoiceType'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách hóa đơn của người dùng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/my-sales:
+    get:
+      summary: Lấy hóa đơn bán hàng của người bán
+      description: Trả về hóa đơn `AUCTION_SALE` thuộc các sản phẩm của người bán hiện tại.
+      operationId: getMySales
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái hóa đơn cần lọc.
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách hóa đơn bán hàng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/my-listing-fees:
+    get:
+      summary: Lấy hóa đơn phí niêm yết
+      description: Trả về hóa đơn `LISTING_FEE` của người bán hiện tại.
+      operationId: getMyListingFees
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái hóa đơn cần lọc.
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách hóa đơn phí niêm yết.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/sold-invoices:
+    get:
+      summary: Lấy hóa đơn đã bán
+      description: Lấy các hóa đơn thuộc seller hiện tại theo trạng thái.
+      operationId: getAllSellerInvoices
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Trạng thái hóa đơn cần lọc.
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách hóa đơn đã bán.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/{id}:
+    get:
+      summary: Lấy chi tiết hóa đơn
+      description: Lấy chi tiết hóa đơn theo `id`. Người mua hoặc người bán liên quan mới được xem.
+      operationId: getInvoiceById
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Chi tiết hóa đơn.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/{id}/report-nonpayment:
+    post:
+      summary: Báo cáo người mua không thanh toán
+      description: |
+        Seller báo cáo hóa đơn quá hạn thanh toán. Hệ thống tạo feedback tiêu cực, giảm điểm uy tín, tăng strike và có thể khóa hoặc vô hiệu hóa người dùng theo rule.
+      operationId: reportNonPayment
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Báo cáo không thanh toán thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/{id}/ship:
+    post:
+      summary: Seller cập nhật thông tin vận chuyển
+      description: Cập nhật mã vận đơn và đơn vị vận chuyển cho hóa đơn đã thanh toán. Hóa đơn chuyển sang trạng thái `SHIPPING`.
+      operationId: shipInvoice
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Mã vận đơn và đơn vị vận chuyển.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipInvoiceRequest'
+      responses:
+        '200':
+          description: Cập nhật vận chuyển thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/{id}/confirm:
+    post:
+      summary: Buyer xác nhận hoàn tất hóa đơn
+      description: Buyer xác nhận đã nhận hàng. Hóa đơn chuyển sang `COMPLETED`, cho phép feedback và giải phóng doanh thu.
+      operationId: confirmInvoice
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Xác nhận hóa đơn thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/dispute/{invoiceId}:
+    get:
+      summary: Lấy khiếu nại theo hóa đơn
+      description: Trả về thông tin dispute liên quan đến hóa đơn.
+      operationId: getDisputeByInvoice
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          description: ID hóa đơn cần lấy dispute.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Thông tin dispute của hóa đơn.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisputeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/seller-stats:
+    get:
+      summary: Lấy thống kê doanh thu seller
+      description: Trả về tổng phiên đấu giá đã tạo và tổng doanh thu của seller hiện tại.
+      operationId: getSellerStats
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Thống kê doanh thu của seller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SellerRevenueResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/{id}/dispute:
+    post:
+      summary: Buyer tạo khiếu nại hóa đơn
+      description: |
+        Tạo dispute cho hóa đơn, tạm dừng auto-complete và chuyển hóa đơn sang trạng thái `DISPUTE`.
+        Admin sẽ giải quyết bằng hoàn tiền cho buyer hoặc hoàn tất để trả doanh thu cho seller.
+      operationId: reportDispute
+      tags: [Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Lý do khiếu nại.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeRequest'
+      responses:
+        '200':
+          description: Tạo khiếu nại thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/admin/invoice/{invoiceId}:
+    get:
+      summary: Admin lấy chi tiết hóa đơn
+      description: Admin xem chi tiết hóa đơn bất kỳ theo `invoiceId`.
+      operationId: getInvoiceByIdForAdmin
+      tags: [Admin, Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          description: ID hóa đơn.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Chi tiết hóa đơn cho admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/admin/disputes/{id}/resolve:
+    post:
+      summary: Admin giải quyết khiếu nại
+      description: |
+        Nếu quyết định `REFUND_TO_BUYER`, hóa đơn chuyển `REFUNDED` và hệ thống gọi VNPay refund.
+        Nếu quyết định `RELEASE_TO_SELLER`, hóa đơn chuyển `COMPLETED` và doanh thu được giải phóng cho seller.
+      operationId: resolveDispute
+      tags: [Admin, Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Quyết định xử lý khiếu nại và ghi chú admin.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDisputeRequest'
+      responses:
+        '200':
+          description: Giải quyết khiếu nại thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/admin/disputes:
+    get:
+      summary: Admin tìm kiếm khiếu nại
+      description: Tìm dispute theo quyết định xử lý và kiểu sắp xếp.
+      operationId: getDisputes
+      tags: [Admin, Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: decision
+          in: query
+          description: Quyết định hoặc trạng thái dispute cần lọc.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách dispute được phân trang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDisputeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/admin/update/{id}:
+    put:
+      summary: Admin cập nhật hóa đơn
+      description: Admin cập nhật trạng thái hóa đơn, thông tin vận chuyển, snapshot người nhận và ghi chú.
+      operationId: updateInvoiceForAdmin
+      tags: [Admin, Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Thông tin hóa đơn cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateInvoiceRequest'
+      responses:
+        '200':
+          description: Admin cập nhật hóa đơn thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /invoices/admin/search:
+    get:
+      summary: Admin tìm kiếm hóa đơn
+      description: Tìm hóa đơn theo keyword, trạng thái, loại hóa đơn và sắp xếp. `keyword` có thể là ID hóa đơn, username hoặc tên sản phẩm.
+      operationId: searchInvoicesForAdmin
+      tags: [Admin, Hóa đơn]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: keyword
+          in: query
+          description: Từ khóa tìm kiếm theo ID invoice, username hoặc tên sản phẩm.
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Trạng thái hóa đơn.
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - name: type
+          in: query
+          description: Loại hóa đơn.
+          schema:
+            $ref: '#/components/schemas/InvoiceType'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách hóa đơn phù hợp bộ lọc.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /payments/vn-pay:
+    get:
+      summary: Tạo URL thanh toán VNPay
+      description: |
+        Tạo URL thanh toán VNPay cho hóa đơn.
+        Với `AUCTION_SALE`, cần truyền `addressId` để snapshot địa chỉ trước khi thanh toán; `LISTING_FEE` không cần snapshot giao hàng nhưng controller hiện nhận cả `invoiceId` và `addressId`.
+      operationId: createVnPayPayment
+      tags: [Thanh toán]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: query
+          required: true
+          description: ID hóa đơn cần thanh toán.
+          schema:
+            type: integer
+            format: int64
+        - name: addressId
+          in: query
+          required: true
+          description: ID địa chỉ giao hàng dùng để snapshot cho hóa đơn mua hàng.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: URL thanh toán VNPay.
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: uri
+              example: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=500000000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /payments/vn-pay-callback:
+    get:
+      summary: VNPay callback
+      description: |
+        Endpoint nhận callback từ VNPay, xác minh chữ ký và cập nhật trạng thái hóa đơn.
+        Thanh toán thành công trả `code` bằng `00`; các mã khác biểu thị thất bại hoặc bị từ chối.
+      operationId: handleVnPayCallback
+      tags: [Thanh toán]
+      parameters:
+        - name: vnp_ResponseCode
+          in: query
+          description: Mã phản hồi từ VNPay.
+          schema:
+            type: string
+          example: "00"
+        - name: vnp_TxnRef
+          in: query
+          description: Mã tham chiếu giao dịch, thường liên quan đến hóa đơn.
+          schema:
+            type: string
+        - name: vnp_TransactionNo
+          in: query
+          description: Mã giao dịch VNPay.
+          schema:
+            type: string
+        - name: vnp_PayDate
+          in: query
+          description: Thời gian thanh toán do VNPay gửi.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Kết quả xử lý callback VNPay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /address:
+    post:
+      summary: Tạo địa chỉ giao hàng
+      description: Tạo địa chỉ giao hàng cho người dùng hiện tại.
+      operationId: createAddress
+      tags: [Địa chỉ]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin địa chỉ giao hàng.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+      responses:
+        '200':
+          description: Tạo địa chỉ thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách địa chỉ của tôi
+      description: Trả về tất cả địa chỉ giao hàng của người dùng hiện tại.
+      operationId: getMyAddresses
+      tags: [Địa chỉ]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách địa chỉ giao hàng của người dùng hiện tại.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AddressResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /address/{id}:
+    get:
+      summary: Lấy chi tiết địa chỉ
+      description: Lấy một địa chỉ giao hàng theo `id`.
+      operationId: getAddress
+      tags: [Địa chỉ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Chi tiết địa chỉ giao hàng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Cập nhật địa chỉ
+      description: Cập nhật địa chỉ giao hàng của người dùng hiện tại.
+      operationId: updateAddress
+      tags: [Địa chỉ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Thông tin địa chỉ cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+      responses:
+        '200':
+          description: Cập nhật địa chỉ thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Xóa địa chỉ
+      description: Xóa địa chỉ giao hàng theo `id`.
+      operationId: deleteAddress
+      tags: [Địa chỉ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Xóa địa chỉ thành công.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /address/{id}/default:
+    patch:
+      summary: Đặt địa chỉ mặc định
+      description: Đặt địa chỉ giao hàng mặc định cho người dùng hiện tại.
+      operationId: setDefaultAddress
+      tags: [Địa chỉ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Đặt địa chỉ mặc định thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /feedback/invoice/{invoiceId}:
+    post:
+      summary: Tạo feedback cho hóa đơn
+      description: |
+        Tạo feedback sau khi hóa đơn đủ điều kiện. Feedback cập nhật điểm uy tín của người nhận.
+        Mỗi hóa đơn chỉ được feedback một lần theo vai trò phù hợp.
+      operationId: createFeedback
+      tags: [Feedback]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          description: ID hóa đơn cần feedback.
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        description: Nội dung đánh giá.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '200':
+          description: Tạo feedback thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /feedback/{id}:
+    put:
+      summary: Cập nhật feedback
+      description: Cập nhật rating hoặc comment của feedback đã tạo.
+      operationId: updateFeedback
+      tags: [Feedback]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Nội dung feedback cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '200':
+          description: Cập nhật feedback thành công.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /feedback/my-total-feedback:
+    get:
+      summary: Đếm feedback của tôi
+      description: Trả về tổng số feedback liên quan đến người dùng hiện tại.
+      operationId: getMyTotalFeedback
+      tags: [Feedback]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tổng số feedback.
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+              example: 8
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /feedback/public/{userId}:
+    get:
+      summary: Lấy feedback công khai của người dùng
+      description: Trả về danh sách feedback công khai theo `userId`, dùng cho hồ sơ uy tín người bán hoặc người mua.
+      operationId: getFeedbackList
+      tags: [Feedback]
+      parameters:
+        - $ref: '#/components/parameters/UserIdNamed'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách feedback công khai.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageFeedbackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications:
+    get:
+      summary: Lấy thông báo của tôi
+      description: Trả về danh sách thông báo của người dùng hiện tại theo phân trang.
+      operationId: getMyNotifications
+      tags: [Thông báo]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách thông báo của người dùng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageNotificationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/{id}/read:
+    patch:
+      summary: Đánh dấu thông báo đã đọc
+      description: Cập nhật một thông báo thành đã đọc.
+      operationId: markNotificationAsRead
+      tags: [Thông báo]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Thông báo sau khi được đánh dấu đã đọc.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/unread-count:
+    get:
+      summary: Đếm thông báo chưa đọc
+      description: Trả về số lượng thông báo chưa đọc của người dùng hiện tại.
+      operationId: getUnreadCount
+      tags: [Thông báo]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Số thông báo chưa đọc.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    format: int64
+                    description: Số thông báo chưa đọc.
+                    example: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /categories:
+    post:
+      summary: Tạo danh mục
+      description: Tạo danh mục sản phẩm mới. Theo cấu hình hiện tại, endpoint này nằm trong nhóm public POST.
+      operationId: createCategory
+      tags: [Danh mục]
+      requestBody:
+        required: true
+        description: Thông tin danh mục.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '200':
+          description: Tạo danh mục thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách danh mục
+      description: Lấy danh sách danh mục sản phẩm theo phân trang.
+      operationId: getAllCategories
+      tags: [Danh mục]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách danh mục được phân trang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /categories/{id}:
+    post:
+      summary: Cập nhật danh mục
+      description: Cập nhật tên hoặc mô tả danh mục. Controller hiện dùng `POST` thay vì `PUT`.
+      operationId: updateCategory
+      tags: [Danh mục]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      requestBody:
+        required: true
+        description: Thông tin danh mục cần cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '200':
+          description: Cập nhật danh mục thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Xóa danh mục
+      description: Xóa danh mục theo `id`.
+      operationId: deleteCategory
+      tags: [Danh mục]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '204':
+          description: Xóa danh mục thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy chi tiết danh mục
+      description: Lấy thông tin danh mục theo `id`.
+      operationId: getCategoryById
+      tags: [Danh mục]
+      parameters:
+        - $ref: '#/components/parameters/LongId'
+      responses:
+        '200':
+          description: Chi tiết danh mục.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /images/upload:
+    post:
+      summary: Upload hình ảnh
+      description: Upload một file ảnh lên Cloudinary và lưu metadata ảnh vào database.
+      operationId: uploadImage
+      tags: [Hình ảnh]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: File ảnh cần upload.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File ảnh cần upload.
+      responses:
+        '200':
+          description: Upload ảnh thành công, trả metadata ảnh.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /images/{id}:
+    delete:
+      summary: Xóa hình ảnh
+      description: Xóa ảnh khỏi Cloudinary và database theo ID ảnh.
+      operationId: deleteImage
+      tags: [Hình ảnh]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID ảnh cần xóa.
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '204':
+          description: Xóa ảnh thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /roles:
+    post:
+      summary: Tạo role
+      description: Tạo role mới và gán danh sách permission.
+      operationId: createRole
+      tags: [Phân quyền]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin role cần tạo.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: Tạo role thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách role
+      description: Trả về tất cả role trong hệ thống.
+      operationId: getAllRoles
+      tags: [Phân quyền]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách role.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /roles/{role}:
+    delete:
+      summary: Xóa role
+      description: Xóa role theo tên.
+      operationId: deleteRole
+      tags: [Phân quyền]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          description: Tên role cần xóa.
+          schema:
+            type: string
+          example: STAFF
+      responses:
+        '204':
+          description: Xóa role thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /roles/permissions:
+    post:
+      summary: Tạo permission
+      description: Tạo permission mới cho hệ thống phân quyền.
+      operationId: createPermission
+      tags: [Phân quyền]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Thông tin permission cần tạo.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionRequest'
+      responses:
+        '200':
+          description: Tạo permission thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: Lấy danh sách permission
+      description: Trả về tất cả permission trong hệ thống.
+      operationId: getAllPermissions
+      tags: [Phân quyền]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách permission.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PermissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /roles/permissions/{permission}:
+    delete:
+      summary: Xóa permission
+      description: Xóa permission theo tên.
+      operationId: deletePermission
+      tags: [Phân quyền]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: permission
+          in: path
+          required: true
+          description: Tên permission cần xóa.
+          schema:
+            type: string
+          example: APPROVE_PRODUCT
+      responses:
+        '204':
+          description: Xóa permission thành công, response body rỗng.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/settings:
+    get:
+      summary: Admin lấy cấu hình hệ thống
+      description: Lấy toàn bộ tham số hệ thống như `LISTING_FEE_PERCENT`, hạn thanh toán hóa đơn, ngày auto-complete và bước giá bid.
+      operationId: getAllSettings
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách cấu hình hệ thống.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemParameter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/settings/{key}:
+    put:
+      summary: Admin cập nhật cấu hình hệ thống
+      description: Cập nhật giá trị tham số hệ thống theo `key`. Thao tác được ghi audit log.
+      operationId: updateSetting
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: Khóa cấu hình cần cập nhật.
+          schema:
+            type: string
+          example: LISTING_FEE_PERCENT
+      requestBody:
+        required: true
+        description: Giá trị cấu hình mới.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSettingRequest'
+            example:
+              value: "0.05"
+      responses:
+        '200':
+          description: Cập nhật cấu hình thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemParameter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/statistics:
+    get:
+      summary: Admin lấy thống kê dashboard
+      description: Lấy thống kê tổng quan theo tháng/năm tùy chọn, gồm số người dùng, phiên active, sản phẩm chờ duyệt, doanh thu, GMV, phí niêm yết và hoa hồng.
+      operationId: getStatistics
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          description: Tháng cần thống kê, từ 1 đến 12.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          description: Năm cần thống kê.
+          schema:
+            type: integer
+            example: 2026
+      responses:
+        '200':
+          description: Dữ liệu thống kê dashboard.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatisticResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/logs:
+    get:
+      summary: Admin lấy audit log
+      description: Lấy nhật ký thao tác admin theo phân trang.
+      operationId: getLogs
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Danh sách audit log.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuditLogResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Xác thực bằng JWT (JSON Web Token). Sau khi đăng nhập thành công,
+        server trả về token. Token này phải được gửi kèm trong header
+        `Authorization` với định dạng: `Bearer <token>`
+
+  parameters:
+    AuthorizationHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: JWT access token theo định dạng `Bearer <token>`.
+      schema:
+        type: string
+    RefreshTokenCookie:
+      name: refresh_token
+      in: cookie
+      required: false
+      description: Refresh token được lưu trong HTTP-only cookie.
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Trang cần lấy, bắt đầu từ 1.
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+      example: 1
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Số phần tử mỗi trang.
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+      example: 10
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: Kiểu sắp xếp, ví dụ `newest`, `oldest`, `price_asc`, `price_desc`.
+      schema:
+        type: string
+    LongId:
+      name: id
+      in: path
+      required: true
+      description: ID tài nguyên.
+      schema:
+        type: integer
+        format: int64
+    UserId:
+      name: id
+      in: path
+      required: true
+      description: ID người dùng.
+      schema:
+        type: string
+    UserIdNamed:
+      name: userId
+      in: path
+      required: true
+      description: ID người dùng.
+      schema:
+        type: string
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: ID phiên đấu giá.
+      schema:
+        type: integer
+        format: int64
+    ProductKeyword:
+      name: keyword
+      in: query
+      required: false
+      description: Từ khóa tìm theo tên hoặc mô tả sản phẩm.
+      schema:
+        type: string
+    CategoryIdQuery:
+      name: categoryId
+      in: query
+      required: false
+      description: ID danh mục cần lọc.
+      schema:
+        type: integer
+        format: int64
+    MinPrice:
+      name: minPrice
+      in: query
+      required: false
+      description: Giá tối thiểu.
+      schema:
+        type: number
+        format: double
+    MaxPrice:
+      name: maxPrice
+      in: query
+      required: false
+      description: Giá tối đa.
+      schema:
+        type: number
+        format: double
+
+  responses:
+    BadRequest:
+      description: Lỗi validation hoặc request không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 400
+            message: Giá khởi điểm phải lớn hơn 0
+            timestamp: "2026-05-15T10:30:00"
+    Unauthorized:
+      description: Chưa xác thực hoặc token không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 401
+            message: Chưa xác thực hoặc token không hợp lệ.
+            timestamp: "2026-05-15T10:30:00"
+    Forbidden:
+      description: Không có quyền thực hiện thao tác này.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 403
+            message: Bạn không có quyền truy cập tài nguyên này.
+            timestamp: "2026-05-15T10:30:00"
+    NotFound:
+      description: Không tìm thấy tài nguyên yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 404
+            message: Không tìm thấy tài nguyên.
+            timestamp: "2026-05-15T10:30:00"
+    InternalServerError:
+      description: Lỗi máy chủ hoặc lỗi nghiệp vụ chưa được ánh xạ cụ thể.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 500
+            message: Lỗi máy chủ.
+            timestamp: "2026-05-15T10:30:00"
+            exception: RuntimeException
+
+  schemas:
+    AuctionStatus:
+      type: string
+      description: Trạng thái vòng đời của phiên đấu giá.
+      enum: [SCHEDULED, ACTIVE, ENDED, CANCELLED, FAILED, WAITING_PAYMENT]
+      example: ACTIVE
+    ProductStatus:
+      type: string
+      description: Trạng thái duyệt của sản phẩm.
+      enum: [WAITING_FOR_APPROVAL, ACTIVE, REJECTED, BANNED]
+      example: WAITING_FOR_APPROVAL
+    InvoiceStatus:
+      type: string
+      description: Trạng thái hóa đơn.
+      enum: [PENDING, PAID, SHIPPING, COMPLETED, DISPUTE, CANCELLED_NON_PAYMENT, CANCELLED_BY_SELLER, REFUNDED]
+      example: PENDING
+    InvoiceType:
+      type: string
+      description: Loại hóa đơn.
+      enum: [AUCTION_SALE, LISTING_FEE]
+      example: AUCTION_SALE
+    FeedbackRating:
+      type: string
+      description: Mức đánh giá feedback, ảnh hưởng đến điểm uy tín.
+      enum: [POSITIVE, NEUTRAL, NEGATIVE]
+      example: POSITIVE
+    DisputeDecision:
+      type: string
+      description: Quyết định xử lý khiếu nại.
+      enum: [PENDING, REFUND_TO_BUYER, RELEASE_TO_SELLER]
+      example: REFUND_TO_BUYER
+
+    AuthenticationRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Username đăng nhập; có thể để trống nếu dùng `email`.
+          example: seller01
+        email:
+          type: string
+          format: email
+          description: Email đăng nhập; có thể để trống nếu dùng `username`.
+          example: seller01@example.com
+        password:
+          type: string
+          format: password
+          description: Mật khẩu tài khoản.
+          example: "P@ssw0rd123"
+    AuthenticationResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token dùng cho header `Authorization`.
+          example: eyJhbGciOiJIUzI1NiJ9...
+        refreshToken:
+          type: string
+          nullable: true
+          description: Refresh token; thường bị set `null` vì server lưu trong HTTP-only cookie.
+          example: null
+        authenticated:
+          type: boolean
+          description: Cho biết đăng nhập có thành công hay không.
+          example: true
+    IntrospectRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: JWT cần kiểm tra.
+          example: eyJhbGciOiJIUzI1NiJ9...
+    IntrospectResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: "`true` nếu token hợp lệ."
+          example: true
+    OtpVerificationRequest:
+      type: object
+      required: [email, otp]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email nhận OTP.
+          example: user@example.com
+        otp:
+          type: string
+          description: Mã OTP.
+          example: "123456"
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Thông báo kết quả xử lý.
+          example: Thao tác thành công.
+
+    UserCreationRequest:
+      type: object
+      required: [username, password, email]
+      properties:
+        username:
+          type: string
+          description: Username không dấu và không chứa khoảng trắng.
+          example: buyer01
+        firstName:
+          type: string
+          description: Tên của người dùng.
+          example: An
+        lastName:
+          type: string
+          description: Họ của người dùng.
+          example: Nguyen
+        password:
+          type: string
+          format: password
+          description: Mật khẩu tài khoản.
+          example: "P@ssw0rd123"
+        email:
+          type: string
+          format: email
+          description: Email liên hệ và xác minh tài khoản.
+          example: buyer01@example.com
+        phoneNumber:
+          type: string
+          description: Số điện thoại.
+          example: "0901234567"
+        isActive:
+          type: boolean
+          description: Trạng thái hoạt động ban đầu.
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo request nếu client gửi kèm.
+          example: "2026-05-15T10:30:00"
+    PasswordCreationRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+          description: Mật khẩu mới cho tài khoản chưa có mật khẩu.
+          example: "P@ssw0rd123"
+    UserUpdateRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          description: Tên mới.
+          example: An
+        lastName:
+          type: string
+          description: Họ mới.
+          example: Nguyen
+        email:
+          type: string
+          format: email
+          description: Email mới.
+          example: an.nguyen@example.com
+        phoneNumber:
+          type: string
+          description: Số điện thoại mới.
+          example: "0909876543"
+    ChangePassRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          description: Mật khẩu hiện tại.
+          example: oldPassword123
+        newPassword:
+          type: string
+          format: password
+          description: Mật khẩu mới.
+          example: newPassword123
+    ForgotPassRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email cần gửi OTP đặt lại mật khẩu.
+          example: user@example.com
+    ResetPassRequest:
+      type: object
+      required: [email, otp, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email cần đặt lại mật khẩu.
+          example: user@example.com
+        otp:
+          type: string
+          description: OTP đặt lại mật khẩu.
+          example: "123456"
+        newPassword:
+          type: string
+          format: password
+          description: Mật khẩu mới.
+          example: "NewP@ss123"
+    AdminCreationRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Username không dấu và không chứa khoảng trắng.
+          example: staff01
+        password:
+          type: string
+          format: password
+          description: Mật khẩu tài khoản.
+          example: "P@ssw0rd123"
+        firstName:
+          type: string
+          description: Tên.
+          example: Binh
+        lastName:
+          type: string
+          description: Họ.
+          example: Tran
+        email:
+          type: string
+          format: email
+          description: Email.
+          example: staff01@example.com
+        phoneNumber:
+          type: string
+          description: Số điện thoại.
+          example: "0912345678"
+        isActive:
+          type: boolean
+          description: Trạng thái hoạt động.
+          example: true
+        roles:
+          type: array
+          description: Danh sách role được gán.
+          items:
+            type: string
+          example: [STAFF]
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo.
+          example: "2026-05-15T10:30:00"
+    AdminUpdateRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          format: password
+          description: Mật khẩu mới nếu cần đổi.
+          example: "P@ssw0rd123"
+        firstName:
+          type: string
+          description: Tên.
+          example: Binh
+        lastName:
+          type: string
+          description: Họ.
+          example: Tran
+        email:
+          type: string
+          format: email
+          description: Email.
+          example: staff01@example.com
+        phoneNumber:
+          type: string
+          description: Số điện thoại.
+          example: "0912345678"
+        isActive:
+          type: boolean
+          description: Trạng thái hoạt động.
+          example: true
+        strikeCount:
+          type: integer
+          description: Số strike do vi phạm như không thanh toán.
+          example: 1
+        reputationScore:
+          type: integer
+          description: Điểm uy tín của người dùng.
+          example: 95
+        roles:
+          type: array
+          description: Danh sách role mới.
+          items:
+            type: string
+          example: [USER, STAFF]
+        updatedAt:
+          type: string
+          format: date-time
+          description: Thời điểm cập nhật.
+          example: "2026-05-15T10:30:00"
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID người dùng.
+          example: 8f8c0d8d-7b5a-4c62-8b95-1b8c8d9b0001
+        username:
+          type: string
+          description: Username.
+          example: buyer01
+        firstName:
+          type: string
+          description: Tên.
+          example: An
+        lastName:
+          type: string
+          description: Họ.
+          example: Nguyen
+        noPassword:
+          type: boolean
+          description: "`true` nếu tài khoản chưa có mật khẩu nội bộ."
+          example: false
+        email:
+          type: string
+          format: email
+          description: Email.
+          example: buyer01@example.com
+        phoneNumber:
+          type: string
+          description: Số điện thoại.
+          example: "0901234567"
+        isActive:
+          type: boolean
+          description: Trạng thái hoạt động.
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo.
+          example: "2026-05-15T10:30:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Thời điểm cập nhật gần nhất.
+          example: "2026-05-15T10:40:00"
+        roles:
+          type: array
+          description: Danh sách role.
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+    UserProfileResponse:
+      allOf:
+        - $ref: '#/components/schemas/UserResponse'
+        - type: object
+          properties:
+            strikeCount:
+              type: integer
+              description: Số strike do vi phạm.
+              example: 0
+            reputationScore:
+              type: integer
+              description: Điểm uy tín.
+              example: 100
+    PublicUserProfileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID người dùng.
+          example: 8f8c0d8d-7b5a-4c62-8b95-1b8c8d9b0001
+        username:
+          type: string
+          description: Username công khai.
+          example: seller01
+        firstName:
+          type: string
+          description: Tên.
+          example: Minh
+        lastName:
+          type: string
+          description: Họ.
+          example: Le
+        reputationScore:
+          type: integer
+          description: Điểm uy tín công khai.
+          example: 98
+        createdAt:
+          type: string
+          format: date-time
+          description: Ngày tham gia.
+          example: "2026-01-15T08:00:00"
+    SimpleUserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID người dùng.
+          example: 8f8c0d8d-7b5a-4c62-8b95-1b8c8d9b0001
+        username:
+          type: string
+          description: Username.
+          example: seller01
+        firstName:
+          type: string
+          description: Tên.
+          example: Minh
+        lastName:
+          type: string
+          description: Họ.
+          example: Le
+        email:
+          type: string
+          format: email
+          description: Email.
+          example: seller01@example.com
+        phoneNumber:
+          type: string
+          description: Số điện thoại.
+          example: "0901111222"
+
+    ProductRequest:
+      type: object
+      required: [name, startPrice, categoryId]
+      properties:
+        name:
+          type: string
+          description: Tên sản phẩm, không được để trống.
+          example: Đồng hồ cơ Seiko
+        description:
+          type: string
+          description: Mô tả chi tiết sản phẩm.
+          example: Đồng hồ đã qua sử dụng, hoạt động tốt.
+        startPrice:
+          type: number
+          format: double
+          description: Giá khởi điểm, phải lớn hơn 0.
+          example: 1200000
+        categoryId:
+          type: integer
+          format: int64
+          description: ID danh mục.
+          example: 3
+        attributes:
+          type: string
+          description: Thuộc tính linh hoạt dạng JSON string.
+          example: '{"brand":"Seiko","condition":"used"}'
+        imageIds:
+          type: array
+          description: Danh sách ID ảnh đã upload.
+          items:
+            type: integer
+            format: int32
+          example: [1, 2]
+    ProductUpdateRequest:
+      type: object
+      required: [name, startPrice, categoryId]
+      properties:
+        name:
+          type: string
+          description: Tên sản phẩm.
+          example: Đồng hồ cơ Seiko 5
+        description:
+          type: string
+          description: Mô tả sản phẩm.
+          example: Bổ sung hộp và dây thay thế.
+        startPrice:
+          type: number
+          format: double
+          description: Giá khởi điểm, phải lớn hơn 0.
+          example: 1300000
+        categoryId:
+          type: integer
+          format: int64
+          description: ID danh mục.
+          example: 3
+        attributes:
+          type: string
+          description: Thuộc tính linh hoạt dạng JSON string.
+          example: '{"brand":"Seiko","condition":"used"}'
+        imageIdsToAdd:
+          type: array
+          description: ID ảnh cần thêm vào sản phẩm.
+          items:
+            type: integer
+            format: int32
+          example: [4]
+        imageIdsToRemove:
+          type: array
+          description: ID ảnh cần gỡ khỏi sản phẩm.
+          items:
+            type: integer
+            format: int32
+          example: [2]
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID sản phẩm.
+          example: 10
+        name:
+          type: string
+          description: Tên sản phẩm.
+          example: Đồng hồ cơ Seiko
+        description:
+          type: string
+          description: Mô tả sản phẩm.
+          example: Đồng hồ đã qua sử dụng, hoạt động tốt.
+        startPrice:
+          type: number
+          format: double
+          description: Giá khởi điểm.
+          example: 1200000
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo sản phẩm.
+          example: "2026-05-15T10:30:00"
+        category:
+          $ref: '#/components/schemas/CategoryResponse'
+        seller:
+          $ref: '#/components/schemas/SimpleUserResponse'
+        status:
+          $ref: '#/components/schemas/ProductStatus'
+        attributes:
+          type: string
+          description: Thuộc tính linh hoạt dạng JSON string.
+          example: '{"brand":"Seiko","condition":"used"}'
+        isActive:
+          type: boolean
+          description: Sản phẩm có đang được bật hay không.
+          example: true
+        images:
+          type: array
+          description: Danh sách ảnh sản phẩm.
+          items:
+            $ref: '#/components/schemas/Image'
+    SimpleProductResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID sản phẩm.
+          example: 10
+        name:
+          type: string
+          description: Tên sản phẩm.
+          example: Đồng hồ cơ Seiko
+        seller:
+          $ref: '#/components/schemas/SimpleUserResponse'
+        startPrice:
+          type: number
+          format: double
+          description: Giá khởi điểm.
+          example: 1200000
+        images:
+          type: array
+          description: Danh sách ảnh sản phẩm.
+          items:
+            $ref: '#/components/schemas/Image'
+
+    AuctionSessionRequest:
+      type: object
+      required: [productId, startTime, endTime]
+      properties:
+        productId:
+          type: integer
+          format: int64
+          description: ID sản phẩm đã được duyệt `ACTIVE`.
+          example: 10
+        startTime:
+          type: string
+          format: date-time
+          description: Thời gian bắt đầu, phải ở tương lai.
+          example: "2026-06-01T09:00:00"
+        endTime:
+          type: string
+          format: date-time
+          description: Thời gian kết thúc, phải ở tương lai và sau `startTime`.
+          example: "2026-06-01T12:00:00"
+        reservePrice:
+          type: number
+          format: double
+          nullable: true
+          description: Giá sàn. Nếu có, seller cần thanh toán `LISTING_FEE`.
+          example: 3000000
+        buyNowPrice:
+          type: number
+          format: double
+          nullable: true
+          description: Giá mua ngay; bị vô hiệu sau bid đầu tiên.
+          example: 5000000
+    UpdateAuctionSessionRequest:
+      type: object
+      properties:
+        startTime:
+          type: string
+          format: date-time
+          description: Thời gian bắt đầu mới.
+          example: "2026-06-01T09:30:00"
+        endTime:
+          type: string
+          format: date-time
+          description: Thời gian kết thúc mới.
+          example: "2026-06-01T12:30:00"
+        startPrice:
+          type: number
+          format: double
+          description: Giá khởi điểm mới.
+          example: 1300000
+        reservePrice:
+          type: number
+          format: double
+          nullable: true
+          description: Giá sàn mới.
+          example: 3000000
+        buyNowPrice:
+          type: number
+          format: double
+          nullable: true
+          description: Giá mua ngay mới.
+          example: 5000000
+    AdminUpdateSessionRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateAuctionSessionRequest'
+        - type: object
+          properties:
+            status:
+              $ref: '#/components/schemas/AuctionStatus'
+    AuctionSessionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID phiên đấu giá.
+          example: 100
+        startTime:
+          type: string
+          format: date-time
+          description: Thời gian bắt đầu.
+          example: "2026-06-01T09:00:00"
+        endTime:
+          type: string
+          format: date-time
+          description: Thời gian kết thúc.
+          example: "2026-06-01T12:00:00"
+        startPrice:
+          type: number
+          format: double
+          description: Giá khởi điểm.
+          example: 1200000
+        currentPrice:
+          type: number
+          format: double
+          description: Giá hiện tại đang hiển thị sau proxy logic.
+          example: 1500000
+        buyNowPrice:
+          type: number
+          format: double
+          nullable: true
+          description: Giá mua ngay nếu còn hiệu lực.
+          example: 5000000
+        status:
+          $ref: '#/components/schemas/AuctionStatus'
+        product:
+          $ref: '#/components/schemas/ProductResponse'
+        highestBidder:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SimpleUserResponse'
+        reservePriceMet:
+          type: boolean
+          description: Cho biết giá hiện tại đã đạt giá sàn hay chưa.
+          example: true
+        myMaxBid:
+          type: number
+          format: double
+          nullable: true
+          description: Max bid của người dùng hiện tại nếu đã đăng nhập và có bid.
+          example: 2000000
+    AdminAuctionSessionResponse:
+      allOf:
+        - $ref: '#/components/schemas/AuctionSessionResponse'
+        - type: object
+          properties:
+            reservePrice:
+              type: number
+              format: double
+              nullable: true
+              description: Giá sàn của phiên.
+              example: 3000000
+            highestMaxBid:
+              type: number
+              format: double
+              nullable: true
+              description: Max bid cao nhất trong phiên.
+              example: 2200000
+            product:
+              $ref: '#/components/schemas/SimpleProductResponse'
+            createdAt:
+              type: string
+              format: date-time
+              description: Thời điểm tạo phiên.
+              example: "2026-05-15T10:30:00"
+            updatedAt:
+              type: string
+              format: date-time
+              description: Thời điểm cập nhật phiên.
+              example: "2026-05-15T10:45:00"
+    CreateAuctionSessionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Thông báo kết quả tạo phiên.
+          example: Tạo phiên đấu giá thành công.
+        paymentUrl:
+          type: string
+          nullable: true
+          description: URL thanh toán phí niêm yết nếu phiên có giá sàn.
+          example: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?...
+        sessionDetails:
+          $ref: '#/components/schemas/AuctionSessionResponse'
+
+    BidRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Số tiền max bid, phải lớn hơn 0 và đáp ứng bước giá hiện tại.
+          example: 1500000
+    BidResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID bid.
+          example: 501
+        displayedAmount:
+          type: number
+          format: double
+          description: Số tiền đang hiển thị sau khi áp dụng proxy bidding.
+          example: 1500000
+        bidTime:
+          type: string
+          format: date-time
+          description: Thời điểm đặt giá.
+          example: "2026-06-01T09:10:00"
+        user:
+          $ref: '#/components/schemas/SimpleUserResponse'
+        auctionSessionId:
+          type: integer
+          format: int64
+          description: ID phiên đấu giá.
+          example: 100
+
+    InvoiceResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID hóa đơn.
+          example: 9001
+        user:
+          $ref: '#/components/schemas/SimpleUserResponse'
+        product:
+          $ref: '#/components/schemas/SimpleProductResponse'
+        auctionSessionId:
+          type: integer
+          format: int64
+          description: ID phiên đấu giá liên quan.
+          example: 100
+        finalPrice:
+          type: number
+          format: double
+          description: Số tiền cần thanh toán.
+          example: 1500000
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo hóa đơn.
+          example: "2026-06-01T12:00:00"
+        dueDate:
+          type: string
+          format: date-time
+          description: Hạn thanh toán hóa đơn.
+          example: "2026-06-04T12:00:00"
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        shippingAddress:
+          type: string
+          nullable: true
+          description: Snapshot địa chỉ giao hàng cho hóa đơn `AUCTION_SALE`.
+          example: 123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM
+        recipientName:
+          type: string
+          nullable: true
+          description: Tên người nhận trong snapshot giao hàng.
+          example: Nguyen Van An
+        recipientPhone:
+          type: string
+          nullable: true
+          description: Số điện thoại người nhận.
+          example: "0901234567"
+        trackingCode:
+          type: string
+          nullable: true
+          description: Mã vận đơn.
+          example: GHN123456789
+        carrier:
+          type: string
+          nullable: true
+          description: Đơn vị vận chuyển.
+          example: GHN
+        shippedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Thời điểm seller gửi hàng.
+          example: "2026-06-02T09:00:00"
+        paymentTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Thời điểm thanh toán thành công.
+          example: "2026-06-01T12:15:00"
+        hasFeedback:
+          type: boolean
+          description: Hóa đơn đã có feedback hay chưa.
+          example: false
+    ShipInvoiceRequest:
+      type: object
+      required: [trackingCode, carrier]
+      properties:
+        trackingCode:
+          type: string
+          description: Mã vận đơn.
+          example: GHN123456789
+        carrier:
+          type: string
+          description: Tên đơn vị vận chuyển.
+          example: GHN
+    DisputeRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: Lý do khiếu nại.
+          example: Tôi chưa nhận được hàng sau thời gian cam kết.
+    ResolveDisputeRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          $ref: '#/components/schemas/DisputeDecision'
+        adminNote:
+          type: string
+          nullable: true
+          description: Ghi chú xử lý của admin.
+          example: Đã xác minh thông tin vận chuyển và hoàn tiền cho buyer.
+    DisputeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID dispute.
+          example: 7001
+        invoiceId:
+          type: integer
+          format: int64
+          description: ID hóa đơn liên quan.
+          example: 9001
+        reason:
+          type: string
+          description: Lý do khiếu nại.
+          example: Tôi chưa nhận được hàng.
+        decision:
+          $ref: '#/components/schemas/DisputeDecision'
+        adminNote:
+          type: string
+          nullable: true
+          description: Ghi chú admin.
+          example: Đã hoàn tiền.
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo dispute.
+          example: "2026-06-05T10:00:00"
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Thời điểm admin giải quyết dispute.
+          example: "2026-06-06T10:00:00"
+    AdminUpdateInvoiceRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        trackingCode:
+          type: string
+          description: Mã vận đơn.
+          example: GHN123456789
+        carrier:
+          type: string
+          description: Đơn vị vận chuyển.
+          example: GHN
+        recipientName:
+          type: string
+          description: Tên người nhận.
+          example: Nguyen Van An
+        recipientPhone:
+          type: string
+          description: Số điện thoại người nhận.
+          example: "0901234567"
+        shippingAddress:
+          type: string
+          description: Địa chỉ giao hàng.
+          example: 123 Nguyễn Huệ, Quận 1, TP.HCM
+        note:
+          type: string
+          description: Ghi chú admin.
+          example: Cập nhật theo yêu cầu hỗ trợ.
+    SellerRevenueResponse:
+      type: object
+      properties:
+        totalAuctionSessions:
+          type: integer
+          format: int64
+          description: Tổng số phiên đấu giá seller đã tạo.
+          example: 12
+        totalRevenue:
+          type: integer
+          format: int64
+          description: Tổng doanh thu seller theo VND.
+          example: 15000000
+    PaymentResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Mã kết quả VNPay, `00` là thành công.
+          example: "00"
+        message:
+          type: string
+          description: Thông báo kết quả thanh toán.
+          example: Thanh toán thành công.
+        paymentTime:
+          type: string
+          description: Thời gian thanh toán do VNPay trả về.
+          example: "20260601121500"
+        transactionId:
+          type: string
+          description: Mã giao dịch VNPay.
+          example: "14587963"
+        invoiceId:
+          type: string
+          description: ID hóa đơn liên quan.
+          example: "9001"
+
+    AddressRequest:
+      type: object
+      required: [recipientName, phoneNumber, street, ward, district, city]
+      properties:
+        recipientName:
+          type: string
+          description: Tên người nhận.
+          example: Nguyen Van An
+        phoneNumber:
+          type: string
+          description: Số điện thoại người nhận.
+          example: "0901234567"
+        street:
+          type: string
+          description: Địa chỉ chi tiết.
+          example: 123 Nguyễn Huệ
+        ward:
+          type: string
+          description: Phường hoặc xã.
+          example: Bến Nghé
+        district:
+          type: string
+          description: Quận hoặc huyện.
+          example: Quận 1
+        city:
+          type: string
+          description: Tỉnh hoặc thành phố.
+          example: TP.HCM
+        isDefault:
+          type: boolean
+          description: Có đặt làm địa chỉ mặc định hay không.
+          example: true
+    AddressResponse:
+      allOf:
+        - $ref: '#/components/schemas/AddressRequest'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: ID địa chỉ.
+              example: 20
+            fullAddress:
+              type: string
+              description: Địa chỉ đầy đủ đã ghép.
+              example: 123 Nguyễn Huệ, Bến Nghé, Quận 1, TP.HCM
+
+    FeedbackRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          $ref: '#/components/schemas/FeedbackRating'
+        comment:
+          type: string
+          nullable: true
+          description: Nội dung nhận xét.
+          example: Người bán giao hàng đúng mô tả.
+    FeedbackDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID feedback.
+          example: 3001
+        invoiceId:
+          type: integer
+          format: int64
+          description: ID hóa đơn.
+          example: 9001
+        fromUsername:
+          type: string
+          description: Username người đánh giá.
+          example: buyer01
+        toUsername:
+          type: string
+          description: Username người nhận đánh giá.
+          example: seller01
+        rating:
+          $ref: '#/components/schemas/FeedbackRating'
+        comment:
+          type: string
+          description: Nội dung nhận xét.
+          example: Giao hàng nhanh.
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo feedback.
+          example: "2026-06-07T09:00:00"
+        reviewAs:
+          type: string
+          description: Vai trò khi đánh giá, ví dụ buyer hoặc seller.
+          example: buyer
+
+    NotificationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID thông báo.
+          example: 4001
+        message:
+          type: string
+          description: Nội dung thông báo.
+          example: Bạn đã thắng phiên đấu giá.
+        isRead:
+          type: boolean
+          description: Thông báo đã được đọc hay chưa.
+          example: false
+        link:
+          type: string
+          nullable: true
+          description: Đường dẫn liên quan đến thông báo.
+          example: /invoices/9001
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo thông báo.
+          example: "2026-06-01T12:05:00"
+
+    CategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Tên danh mục.
+          example: Đồng hồ
+        description:
+          type: string
+          nullable: true
+          description: Mô tả danh mục.
+          example: Các loại đồng hồ mới và đã qua sử dụng.
+    CategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/CategoryRequest'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: ID danh mục.
+              example: 3
+
+    Image:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          description: ID ảnh trong database.
+          example: 1
+        publicId:
+          type: string
+          description: Public ID của ảnh trên Cloudinary.
+          example: auction/products/seiko_001
+        url:
+          type: string
+          format: uri
+          description: URL ảnh.
+          example: https://res.cloudinary.com/demo/image/upload/v1/seiko.jpg
+
+    PermissionRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Tên permission.
+          example: APPROVE_PRODUCT
+        description:
+          type: string
+          description: Mô tả permission.
+          example: Cho phép duyệt sản phẩm.
+    PermissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/PermissionRequest'
+    RoleRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Tên role.
+          example: STAFF
+        description:
+          type: string
+          description: Mô tả role.
+          example: Nhân viên vận hành.
+        permissions:
+          type: array
+          description: Danh sách tên permission được gán.
+          items:
+            type: string
+          example: [APPROVE_PRODUCT, UPDATE_AUCTION]
+    RoleResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Tên role.
+          example: STAFF
+        description:
+          type: string
+          description: Mô tả role.
+          example: Nhân viên vận hành.
+        permissions:
+          type: array
+          description: Danh sách permission.
+          items:
+            $ref: '#/components/schemas/PermissionResponse'
+
+    SystemParameter:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID tham số hệ thống.
+          example: 1
+        paramKey:
+          type: string
+          description: Khóa cấu hình.
+          example: LISTING_FEE_PERCENT
+        paramValue:
+          type: string
+          description: Giá trị cấu hình được lưu dạng String.
+          example: "0.05"
+        description:
+          type: string
+          description: Mô tả cấu hình.
+          example: Tỷ lệ phí niêm yết theo giá sàn.
+    UpdateSettingRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          description: Giá trị cấu hình mới.
+          example: "0.05"
+    StatisticResponse:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+          format: int64
+          description: Tổng số thành viên.
+          example: 1200
+        activeAuctions:
+          type: integer
+          format: int64
+          description: Số phiên đấu giá đang chạy.
+          example: 36
+        pendingProducts:
+          type: integer
+          format: int64
+          description: Số sản phẩm chờ duyệt.
+          example: 18
+        totalRevenue:
+          type: number
+          format: double
+          description: Tổng doanh thu thực tế.
+          example: 25000000
+        totalGMV:
+          type: number
+          format: double
+          description: Tổng giá trị giao dịch.
+          example: 320000000
+        totalListingFee:
+          type: number
+          format: double
+          description: Tổng phí niêm yết.
+          example: 5000000
+        commissionRevenue:
+          type: number
+          format: double
+          description: Doanh thu hoa hồng.
+          example: 20000000
+    ProductSearchRequest:
+      type: object
+      properties:
+        keyword:
+          type: string
+          description: Từ khóa tìm sản phẩm.
+          example: đồng hồ
+        categoryId:
+          type: integer
+          format: int64
+          description: ID danh mục cần lọc.
+          example: 3
+        minPrice:
+          type: number
+          format: double
+          description: Giá tối thiểu.
+          example: 1000000
+        maxPrice:
+          type: number
+          format: double
+          description: Giá tối đa.
+          example: 5000000
+        sort:
+          type: string
+          description: Kiểu sắp xếp.
+          example: newest
+        status:
+          $ref: '#/components/schemas/ProductStatus'
+        sellerId:
+          type: string
+          description: ID người bán.
+          example: 8f8c0d8d-7b5a-4c62-8b95-1b8c8d9b0001
+        isActive:
+          type: boolean
+          description: Trạng thái bật/tắt sản phẩm.
+          example: true
+    AuctionSessionAdminSearchRequest:
+      type: object
+      properties:
+        productName:
+          type: string
+          description: Tên sản phẩm trong phiên đấu giá cần tìm.
+          example: Đồng hồ
+        status:
+          $ref: '#/components/schemas/AuctionStatus'
+        sort:
+          type: string
+          description: Kiểu sắp xếp.
+          example: newest
+    InvoiceAdminSearchRequest:
+      type: object
+      properties:
+        keyword:
+          type: string
+          description: Từ khóa tìm theo ID invoice, username hoặc tên sản phẩm.
+          example: seller01
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        sort:
+          type: string
+          description: Kiểu sắp xếp.
+          example: newest
+    DisputeSearchRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          description: Quyết định hoặc trạng thái dispute cần lọc.
+          example: PENDING
+        sort:
+          type: string
+          description: Kiểu sắp xếp.
+          example: newest
+    NotificationRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Nội dung thông báo.
+          example: Bạn đã thắng phiên đấu giá.
+        link:
+          type: string
+          nullable: true
+          description: Đường dẫn liên quan đến thông báo.
+          example: /invoices/9001
+    LogoutRequest:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token cần thu hồi.
+          example: eyJhbGciOiJIUzI1NiJ9...
+        refreshToken:
+          type: string
+          description: Refresh token cần thu hồi.
+          example: 9c8f3f8d-6d45-4c6d-a2b8-1a2b3c4d5e6f
+    ExchangeTokenRequest:
+      type: object
+      description: Request snake_case gửi đến Google OAuth token endpoint qua OpenFeign client.
+      properties:
+        code:
+          type: string
+          description: Authorization code của Google.
+          example: 4/0AfJohXn...
+        client_id:
+          type: string
+          description: Google OAuth client ID.
+          example: google-client-id.apps.googleusercontent.com
+        client_secret:
+          type: string
+          description: Google OAuth client secret.
+          example: google-client-secret
+        redirect_uri:
+          type: string
+          format: uri
+          description: Redirect URI đã cấu hình với Google.
+          example: http://localhost:5173/authenticate
+        grant_type:
+          type: string
+          description: OAuth grant type.
+          example: authorization_code
+    ExchangeTokenResponse:
+      type: object
+      description: Response snake_case từ Google OAuth token endpoint.
+      properties:
+        access_token:
+          type: string
+          description: Access token do Google cấp.
+          example: ya29.a0AfH6S...
+        expires_in:
+          type: integer
+          format: int64
+          description: Thời gian hết hạn tính bằng giây.
+          example: 3599
+        refresh_token:
+          type: string
+          nullable: true
+          description: Refresh token do Google cấp nếu có.
+          example: 1//0g...
+        scope:
+          type: string
+          description: Scope được cấp.
+          example: email profile
+        token_type:
+          type: string
+          description: Loại token.
+          example: Bearer
+    OutboundUserResponse:
+      type: object
+      description: Thông tin người dùng lấy từ Google userinfo endpoint.
+      properties:
+        id:
+          type: string
+          description: Google user ID.
+          example: "11223344556677889900"
+        email:
+          type: string
+          format: email
+          description: Email Google.
+          example: user@gmail.com
+        verified_email:
+          type: boolean
+          description: Email Google đã được xác minh hay chưa.
+          example: true
+        name:
+          type: string
+          description: Tên hiển thị đầy đủ.
+          example: Nguyen Van An
+        given_name:
+          type: string
+          description: Tên riêng.
+          example: An
+        family_name:
+          type: string
+          description: Họ.
+          example: Nguyen
+        picture:
+          type: string
+          format: uri
+          description: URL ảnh đại diện Google.
+          example: https://lh3.googleusercontent.com/a/default-user
+        locale:
+          type: string
+          description: Locale của tài khoản Google.
+          example: vi
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID audit log.
+          example: 1
+        adminUsername:
+          type: string
+          description: Username admin thực hiện thao tác.
+          example: admin
+        action:
+          type: string
+          description: Mã hành động.
+          example: VERIFY_PRODUCT
+        targetId:
+          type: string
+          description: ID đối tượng bị tác động.
+          example: "10"
+        content:
+          type: string
+          description: Nội dung chi tiết thao tác.
+          example: Duyệt sản phẩm Đồng hồ cơ Seiko.
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm ghi log.
+          example: "2026-05-15T10:30:00"
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          description: HTTP status code.
+          example: 400
+        message:
+          type: string
+          description: Thông báo lỗi.
+          example: Giá khởi điểm phải lớn hơn 0
+        timestamp:
+          type: string
+          format: date-time
+          description: Thời điểm phát sinh lỗi.
+          example: "2026-05-15T10:30:00"
+        exception:
+          type: string
+          nullable: true
+          description: Tên exception nếu response có kèm.
+          example: RuntimeException
+
+    PageUserResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserResponse'
+    PageProductResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductResponse'
+    PageAuctionSessionResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuctionSessionResponse'
+    PageAdminAuctionSessionResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminAuctionSessionResponse'
+    PageBidResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/BidResponse'
+    PageInvoiceResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/InvoiceResponse'
+    PageDisputeResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/DisputeResponse'
+    PageFeedbackResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeedbackDto'
+    PageNotificationResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationResponse'
+    PageCategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/CategoryResponse'
+    PageAuditLogResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLog'
+    PageResponse:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          description: Trang hiện tại, bắt đầu từ 1.
+          example: 1
+        totalPages:
+          type: integer
+          description: Tổng số trang.
+          example: 5
+        pageSize:
+          type: integer
+          description: Số phần tử mỗi trang.
+          example: 10
+        totalElements:
+          type: integer
+          format: int64
+          description: Tổng số phần tử.
+          example: 48
+        data:
+          type: array
+          description: Dữ liệu của trang hiện tại.
+          items:
+            type: object

@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 @Builder
 public class FeedbackDto {
     Long id;
+    Long invoiceId;
     String fromUsername;
     String toUsername;
     FeedbackRating rating;

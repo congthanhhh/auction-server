@@ -7,6 +7,7 @@ import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface FeedbackMapper {
+    @Mapping(target = "invoiceId", source = "invoice.id")
     @Mapping(target = "fromUsername", source = "fromUser.username")
     @Mapping(target = "toUsername", source = "toUser.username")
     FeedbackDto toFeedbackDto(Feedback feedback);
